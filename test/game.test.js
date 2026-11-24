@@ -190,3 +190,53 @@ test('targeted cards name another joined agent and retain that name when reporte
   assert.equal(completed.events[0].description, first.description);
   assert.equal(completed.player.missions.length, 2);
 });
+
+test('a secret codeword settles once and stays private', async () => {
+  const game = {
+    code: 'ABC123', cutoff: Date.now() + 60000, host: 'leader', sequence: 0,
+    revealIndex: 0, events: [],
+    players: Object.fromEntries(['Gravy Boat', 'Night Fox', 'Lockpick'].map((name, index) => [
+      index + 1, { id: index + 1, name, token: 'token' + (index + 1), score: 0, completed: 0, assignments: [] },
+    ])),
+  };
+  const handler = gameHandler({ read: () => game, update: (_code, update) => update(game) });
+  async function request(action, input, expected, authorization) {
+    let result;
+    await handler({
+      method: input ? 'POST' : 'GET', url: '/api/games/ABC123' + action,
+      headers: { authorization }, rawBody: input && Buffer.from(JSON.stringify(input)),
+    }, {
+      writeHead(status) { assert.equal(status, expected); },
+      end(body) { result = JSON.parse(body); },
+    });
+    return result;
+  }
+  const issued = await request('/codeword-mission', {}, 200, 'Bearer token1');
+  const { phrase, targetId } = issued.codewords.mission;
+  assert.equal((await request('/codeword-mission', {}, 200, 'Bearer token1')).codewords.mission.phrase, phrase);
+  assert.equal((await request('', null, 200)).codewords, null);
+  assert.equal((await request('', null, 200, 'Bearer token' + targetId)).codewords.mission, null);
+  await request('/record-codeword', { phrase }, 400, 'Bearer token1');
+  const delivered = await request('/record-codeword', { phrase: phrase.toLowerCase().replaceAll(' ', '-') }, 200, 'Bearer token' + targetId);
+  assert.deepEqual(delivered.receipt, { delivered: true, reward: 300 });
+  assert.equal(game.players[1].score, 300);
+  assert.equal(game.players[1].completed, 1);
+  assert.equal(game.players[targetId].score, 300);
+  assert.ok(!JSON.stringify(delivered.events).includes(phrase));
+  await request('/record-codeword', { phrase }, 409, 'Bearer token' + targetId);
+
+  const next = (await request('/codeword-mission', {}, 200, 'Bearer token2')).codewords.mission;
+  assert.notEqual(next.phrase, phrase);
+  const interceptor = [1, 3].find(id => id !== next.targetId);
+  const before = game.players[interceptor].score;
+  const senderBefore = game.players[2].score;
+  const caught = await request('/record-codeword', { phrase: next.phrase }, 200, 'Bearer token' + interceptor);
+  assert.deepEqual(caught.receipt, { delivered: false, reward: 300 });
+  assert.equal(game.players[interceptor].score, before + 300);
+  assert.equal(game.players[2].score, senderBefore - 150);
+  assert.equal((await request('', null, 200, 'Bearer token2')).codewords.mission.outcome, 'intercepted');
+  await request('/record-codeword', { phrase: next.phrase }, 409, 'Bearer token' + next.targetId);
+  game.cutoff = Date.now() - 1;
+  await request('/codeword-mission', {}, 409, 'Bearer token3');
+  await request('/record-codeword', { phrase }, 409, 'Bearer token3');
+});

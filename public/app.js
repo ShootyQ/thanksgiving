@@ -121,6 +121,32 @@ function updateAvatarPicker() {
   if (status.textContent !== message) status.textContent = message;
 }
 
+function codewordPanel() {
+  const relay = game?.codewords;
+  if (!relay) return '';
+  const mission = relay.mission;
+  const open = game.phase === 'open';
+  const outcomes = {
+    active: open ? 'Waiting for someone to record it.' : 'Expired at cutoff.',
+    delivered: `Delivered · +${relay.reward} XP`,
+    intercepted: `Intercepted · −${relay.penalty} XP`,
+  };
+  return `<section class="panel briefing codeword-panel" id="codeword-panel">
+    <div class="kicker">${icon('lock')} SECRET DELIVERY</div>
+    <h3>Codeword mission</h3>
+    ${mission ? `<p>Give this codeword to <strong>${escape(mission.target)} (#${mission.targetId})</strong> in person.</p>
+      <div class="codeword-phrase">${escape(mission.phrase)}</div><p>${outcomes[mission.outcome]}</p>`
+      : open ? `<p>${relay.ready ? 'Get a private codeword and a designated recipient.' : 'Available once three agents have joined.'}</p>
+        <button type="button" class="secondary" data-action="codeword-mission" ${relay.ready ? '' : 'disabled'}>Get codeword mission</button>` : ''}
+    ${open && relay.ready ? `<form id="codeword-form">
+      <label for="received-codeword">Record a secret codeword</label>
+      <input id="received-codeword" name="phrase" maxlength="48" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Enter the full codeword">
+      <button type="submit" class="primary">Record codeword</button>
+      <p>Right recipient: both agents earn ${relay.reward} XP. Intercepted: the recipient earns ${relay.reward} XP and the sender loses ${relay.penalty} XP.</p>
+    </form>` : ''}
+  </section>`;
+}
+
 function agent() {
   if (code && !game?.player) {
     if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
@@ -131,7 +157,7 @@ function agent() {
   const playing = !game || game.phase === 'open';
   return `<div class="dossier-banner">
     <div><div class="kicker banner-label">${avatarBadge(avatarsById.get(player.avatar)) || icon('lock')} CLASSIFIED <span class="banner-dot"></span> ${agentLabel(player.id)}</div>
-    <h1>Agent dossier<span>.</span></h1><p>Your missions are for your eyes only.</p></div>
+    <h1>Agent dossier<span>.</span></h1><p>Your missions are for your eyes only.</p>${game?.codewords && playing ? '<a class="codeword-jump" href="#codeword-panel">Secret delivery ↓</a>' : ''}</div>
     <div class="banner-mark" aria-hidden="true">${icon('target')}</div>
     <div class="status"><i></i>${phaseLabel()}</div>
   </div>
@@ -141,6 +167,7 @@ function agent() {
       ${player.missions.map((mission, index) => missionCard(mission, index, playing)).join('') || empty('You’ve cleared your mission deck.')}
     </section>
     <aside>
+      ${codewordPanel()}
       <section class="panel stat-panel">
         <div class="kicker">${icon('shield')} AGENT RECORD</div>
         <div class="score"><strong>${xp(player.score)}</strong><span> XP</span></div><p>Total score</p>
@@ -186,7 +213,7 @@ function matching() {
   const identity = game?.identity;
   const heading = description => header('COUNTERINTELLIGENCE', 'Identity match', description);
   if (!game) return heading(escape(openingError || 'Open the Identity match page from your game.'));
-  if (!identity) return heading('Identity matching is unavailable on this server.');
+  if (!identity) return heading('The game leader needs to deploy the latest Firebase function to enable identity matching.');
   if (!game.player) return `${heading('Join the game to make guesses.')}<a class="inline-link" href="${joinLink()}">Join game ${icon('arrow')}</a>`;
   if (!identity.opened) return heading(game.phase === 'revealed' ? 'The identity round did not open.' : 'Waiting for the game leader to open the round.');
   if (!identity.eligible) return heading('You can play missions. The identity round roster was set before you joined.');
@@ -267,8 +294,18 @@ function tv() {
 function render() {
   app.classList.toggle('tv-view', page === 'tv');
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
+  const previousCodeword = document.querySelector('#received-codeword');
+  const focusedCodeword = previousCodeword && document.activeElement === previousCodeword;
   app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
   updateAvatarPicker();
+  const codeword = document.querySelector('#received-codeword');
+  if (previousCodeword && codeword) {
+    codeword.value = previousCodeword.value;
+    if (focusedCodeword) {
+      codeword.focus({ preventScroll: true });
+      codeword.setSelectionRange(previousCodeword.selectionStart, previousCodeword.selectionEnd);
+    }
+  }
 }
 
 async function request(path = '', data, useToken = page === 'host' ? hostToken : (page === 'agent' || page === 'identity') ? playerToken : null) {
@@ -370,6 +407,13 @@ app.addEventListener('submit', async event => {
       localStorage.setItem('gobble-host-' + result.code, result.token);
       localStorage.setItem('gobble-last-host', result.code);
       location.href = gameLink('host', result.code);
+    } else if (id === 'codeword-form') {
+      const response = await request('/' + code + '/record-codeword', { phrase: form.get('phrase') });
+      const { receipt, ...state } = response;
+      game = state;
+      event.target.reset();
+      render();
+      flash(`${receipt.delivered ? 'Delivery confirmed' : 'Codeword intercepted'}. +${receipt.reward} XP`);
     } else if (id === 'guess-form') {
       const guesses = Object.fromEntries([...form].filter(([, choice]) => choice));
       game = await request('/' + code + '/guess', { guesses });

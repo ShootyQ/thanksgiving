@@ -301,3 +301,9 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
   .identity-matches li, .guess-row { grid-template-columns: minmax(0, 1fr); }
   .identity-correct { grid-column: 1; }
 }
+
+.codeword-jump { display: inline-block; color: #f0b783; margin-top: 8px; font-weight: 700; }
+.codeword-panel { scroll-margin-top: 16px; }
+.codeword-panel > button { margin-top: 10px; }
+.codeword-phrase { margin: 8px 0 5px; padding: 9px; border: 1px dashed #aca48d; border-radius: 5px; background: #f1ebd9; font: 700 1rem var(--mono); }
+#codeword-form { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); gap: 6px; }

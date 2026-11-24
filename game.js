@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import QRCode from 'qrcode';
 import { missions } from './missions.js';
 import { avatars } from './public/avatars.js';
+import { codewordView, issueCodeword, recordCodeword } from './codewords.js';
 import { registerIdentity, openIdentityRound, saveGuesses, identityScore, identityView } from './identity.js';
 
 const token = () => randomBytes(24).toString('base64url');
@@ -57,6 +58,7 @@ function view(game, auth) {
     code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
     revealIndex: game.revealIndex,
     identity: identityView(game, player, revealed),
+    codewords: codewordView(game, player),
     player: player ? { ...finalPlayer(player), missions: active(player).map(details) } : null,
     reveal: phase === 'revealed' ? standings.map(row => ({
       ...row, missions: game.players[row.id].assignments.map(details),
@@ -126,7 +128,7 @@ export const gameHandler = store => async (request, response) => {
       } while (!(await store.create(game)));
       return send(response, 201, { token: game.host, ...view(game, game.host) });
     }
-    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr|identity-open|guess))?$/i);
+    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr|identity-open|guess|codeword-mission|record-codeword))?$/i);
     const missing = () => fail(404, 'Game not found. Check the join code.');
     if (!route) missing();
     const code = route[1].toUpperCase();
@@ -159,6 +161,11 @@ export const gameHandler = store => async (request, response) => {
     send(response, error.status || 500, error.status ? { error: error.message } : { error: 'Something went wrong.' });
   }
 };
+
+function addReport(game, report) {
+  game.events.push({ sequence: ++game.sequence, ...report });
+  if (game.events.length > 30) game.events.shift();
+}
 
 function updateGame(game, action, auth, input) {
   if (action === 'join') {
@@ -193,11 +200,9 @@ function updateGame(game, action, auth, input) {
       assignment.state = 'completed';
       player.score += mission.points;
       player.completed++;
-      game.events.push({
-        sequence: ++game.sequence, name: player.name, points: mission.points,
-        title: mission.title, description: mission.description,
+      addReport(game, {
+        name: player.name, points: mission.points, title: mission.title, description: mission.description,
       });
-      if (game.events.length > 30) game.events.shift();
     } else if (input.result === 'sniffed') {
       assignment.state = 'sniffed';
       player.score -= sniffedPenalty;
@@ -208,6 +213,17 @@ function updateGame(game, action, auth, input) {
       fail(400, 'Invalid mission result.');
     }
     deal(game, player);
+  } else if (action === 'codeword-mission' || action === 'record-codeword') {
+    const player = Object.values(game.players).find(item => item.token === auth);
+    if (!player) fail(403, 'Join this game to use codewords.');
+    if (status(game) !== 'open') fail(409, 'The game is closed.');
+    if (action === 'codeword-mission') {
+      issueCodeword(game, player, fail);
+    } else {
+      const { delivered, reward, report } = recordCodeword(game, player, input.phrase, fail);
+      if (report) addReport(game, report);
+      return { status: 200, data: { ...view(game, auth), receipt: { delivered, reward } } };
+    }
   } else if (action === 'identity-open') {
     if (auth !== game.host) fail(403, 'Only the game leader can open the identity round.');
     if (status(game) !== 'open') fail(409, 'The game is closed.');

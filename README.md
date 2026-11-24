@@ -20,6 +20,10 @@ Scoring closes and missions are revealed automatically at cutoff. The leader can
 
 The local backend runs as one process and persists games to `.data/games.json`. Use `GOBBLE_DATA_DIR` for a different writable data directory and `PORT` for a different port. Keep the JSON file private and use a persistent local volume if hosting the Node backend remotely.
 
+## Secret delivery
+
+With at least three agents in the game, each player can claim one private codeword mission from their dossier. Say the full phrase to the named agent in person. The first other player to record it settles the mission. A correct delivery earns both players 300 XP. An interception earns the recipient 300 XP and costs the sender 150 XP. Recording closes at cutoff.
+
 ## Identity round
 
 Guests choose a public codename and enter a real name privately. Once everyone has joined, the game leader opens identity matching from the leader page. That locks the side-game roster so new entries cannot give away the name-to-codename match. Joined agents in that roster use **Identity match** to save guesses and revise them until cutoff. Each correct guess adds 600 XP to the final standings.
