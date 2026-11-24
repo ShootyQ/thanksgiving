@@ -52,7 +52,7 @@ const escape = value => String(value).replace(/[&<>"']/g, char =>
 const gameLink = (view, gameCode = code) => `${location.pathname}?view=${view}${gameCode ? '&game=' + encodeURIComponent(gameCode) : ''}`;
 const joinLink = (gameCode = code) => `${location.pathname}?join=${encodeURIComponent(gameCode)}`;
 const link = (label, view, image) => `<a class="${page === view ? 'selected' : ''}" href="${gameLink(view, code || (view === 'host' ? localStorage.getItem('gobble-last-host') : ''))}">${icon(image)}<span>${label}</span></a>`;
-nav.innerHTML = link('Agent dossier', 'agent', 'folder') + link('TV scoreboard', 'tv', 'tv') + link('Game leader', 'host', 'settings');
+nav.innerHTML = link('Agent dossier', 'agent', 'folder') + (code ? link('Identity match', 'identity', 'target') : '') + link('TV scoreboard', 'tv', 'tv') + link('Game leader', 'host', 'settings');
 
 const demoCards = [
   ['Operation Platypus', 'Get another guest to say “platypus” without directly asking them to.', 'Easy', 100],
@@ -125,7 +125,7 @@ function agent() {
   if (code && !game?.player) {
     if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
     return `${header('SECURE ACCESS', 'Join the operation', `Game code ${game.code}`)}
-      <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${game.phase === 'open' ? `<form id="join-form"><label>Your name<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="Enter your name"></label>${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
+      <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${game.phase === 'open' ? `<form id="join-form"><label>${game.identity ? 'Create your agent name' : 'Your name'}<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="${game.identity ? 'A codename others won’t guess' : 'Enter your name'}"></label>${game.identity ? `<label>Your real name<input name="realName" maxlength="40" autocomplete="name" required aria-describedby="real-name-help" placeholder="First name and last initial"></label><p class="identity-help" id="real-name-help">Your codename is public. Your real name appears in the guessing list without a codename. Only players in the identity round see the matches at cutoff.</p>` : ''}${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
   }
   const player = game?.player || demo;
   const playing = !game || game.phase === 'open';
@@ -145,6 +145,7 @@ function agent() {
         <div class="kicker">${icon('shield')} AGENT RECORD</div>
         <div class="score"><strong>${xp(player.score)}</strong><span> XP</span></div><p>Total score</p>
         <div class="stat-bottom"><span>Missions completed</span><strong>${player.completed}</strong></div>
+        ${game?.phase === 'revealed' && game.identity?.eligible ? `<div class="stat-bottom"><span>Identity bonus</span><strong>+${xp(player.identityXp)} XP</strong></div>` : ''}
       </section>
       <section class="panel briefing">
         <div class="kicker">${icon('folder')} FIELD BRIEFING</div>
@@ -170,10 +171,54 @@ function host() {
     <h2>Guest list</h2>${standings()}
     <div class="host-actions">${game.phase === 'closed' ? '<button class="primary" data-action="reveal">Open group reveal</button>' : ''}
     ${game.phase === 'open' ? '<p>The group reveal opens automatically at the scoring cutoff.</p>' : ''}
+    ${game.phase === 'open' && game.identity ? `<section class="identity-host">
+      <h3>Identity matching</h3>
+      ${game.identity.opened ? '<p>Guessing is open until cutoff.</p>' : `<p>${game.identity.readyCount} ready. Open once everyone has joined. The guessing roster is set when the round opens.</p>
+        <button class="primary" data-action="identity-open" ${game.identity.readyCount < 3 ? 'disabled' : ''}>Open identity round</button>`}
+    </section>` : ''}
     ${game.phase === 'revealed' && game.reveal.length ? `<button class="secondary" data-action="advance" data-step="-1" ${game.revealIndex === 0 ? 'disabled' : ''}>Previous agent</button> <button class="primary" data-action="advance" data-step="1" ${game.revealIndex >= game.reveal.length - 1 ? 'disabled' : ''}>Next agent</button>` : ''}</div></section>
     <aside><section class="panel briefing"><div class="kicker">RECRUIT AGENTS</div>${qr()}<h2>${game.code}</h2>
     <button class="secondary" data-action="copy">Copy join link</button> <a class="inline-link" href="${joinLink()}">${playerToken ? 'My missions' : 'Join as a player'} ${icon('arrow')}</a> <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a></section>
     <section class="panel briefing"><div class="kicker">TIME REMAINING</div><h3 data-clock>${countdown()}</h3><p>Cutoff at ${new Date(game.cutoff).toLocaleString()}</p></section></aside></div>`;
+}
+
+function matching() {
+  const identity = game?.identity;
+  const heading = description => header('COUNTERINTELLIGENCE', 'Identity match', description);
+  if (!game) return heading(escape(openingError || 'Open the Identity match page from your game.'));
+  if (!identity) return heading('Identity matching is unavailable on this server.');
+  if (!game.player) return `${heading('Join the game to make guesses.')}<a class="inline-link" href="${joinLink()}">Join game ${icon('arrow')}</a>`;
+  if (!identity.opened) return heading(game.phase === 'revealed' ? 'The identity round did not open.' : 'Waiting for the game leader to open the round.');
+  if (!identity.eligible) return heading('You can play missions. The identity round roster was set before you joined.');
+  if (game.phase === 'revealed') {
+    return `${heading(`You identified ${game.player.identified} and earned ${xp(game.player.identityXp)} XP.`)}
+      <ul class="identity-matches">${identity.matches.map(match => {
+        const row = game.standings.find(entry => entry.id === match.agentId);
+        return `<li class="panel"><strong class="standing-agent">${avatarBadge(avatarsById.get(row.avatar))}${escape(row.name)} <small>#${row.id}</small></strong>
+          <span>${escape(match.realName)}</span>${match.correct ? '<small class="identity-correct">Correct match</small>' : ''}</li>`;
+      }).join('')}</ul>`;
+  }
+  return `${heading(`Match each codename to a real name for ${identity.points} XP per correct guess. You can change guesses until cutoff.`)}
+    <form id="guess-form" class="identity-matches">${identity.agentIds.map(id => {
+      const row = game.standings.find(entry => entry.id === id);
+      const current = identity.guesses[id] || '';
+      return `<div class="panel guess-row">
+        <label for="guess-${id}" class="standing-agent">${avatarBadge(avatarsById.get(row.avatar))}${escape(row.name)} <small>#${id}</small></label>
+        <div class="guess-controls"><select id="guess-${id}" name="${id}">
+          <option value="">Choose real name</option>
+          ${identity.choices.map(choice => `<option value="${escape(choice.id)}" ${choice.id === current ? 'selected' : ''}>${escape(choice.name)}</option>`).join('')}
+        </select></div>
+      </div>`;
+    }).join('')}<button type="submit" class="primary">Save guesses</button></form>`;
+}
+
+function awards() {
+  const award = (label, field) => {
+    const highest = Math.max(0, ...game.standings.map(row => row[field] || 0));
+    const names = game.standings.filter(row => row[field] === highest).map(row => escape(row.name)).join(' · ');
+    return `<div><div class="kicker">${label}</div><strong>${highest ? names : '—'}</strong><span>${highest}</span></div>`;
+  };
+  return `<section class="end-awards" aria-label="Game awards">${award('MOST MISSIONS COMPLETED', 'completed')}${award('MOST AGENTS IDENTIFIED', 'identified')}</section>`;
 }
 
 function standings() {
@@ -209,6 +254,7 @@ function tv() {
       <h2>${live ? 'Standings' : 'Final standings'}</h2>${standings()}
     </section>
     <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
+      ${!live ? awards() : ''}
       ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
         <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
@@ -221,11 +267,11 @@ function tv() {
 function render() {
   app.classList.toggle('tv-view', page === 'tv');
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
-  app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : agent();
+  app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
   updateAvatarPicker();
 }
 
-async function request(path = '', data, useToken = page === 'host' ? hostToken : page === 'agent' ? playerToken : null) {
+async function request(path = '', data, useToken = page === 'host' ? hostToken : (page === 'agent' || page === 'identity') ? playerToken : null) {
   const response = await fetch(apiBase + '/api/games' + path, {
     method: data ? 'POST' : 'GET',
     headers: { ...(useToken ? { Authorization: 'Bearer ' + useToken } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
@@ -291,10 +337,12 @@ async function refresh() {
     }
     if (JSON.stringify(game) !== JSON.stringify(next)) {
       const preserveJoinForm = document.querySelector('#join-form') && next.phase === 'open' &&
-        !next.player && game.avatarSelection === next.avatarSelection;
+        !next.player && game.avatarSelection === next.avatarSelection && Boolean(game.identity) === Boolean(next.identity);
+      const preserveMatching = page === 'identity' && game?.phase === next.phase &&
+        JSON.stringify(game?.identity) === JSON.stringify(next.identity);
       game = next;
       if (preserveJoinForm) updateAvatarPicker();
-      else render();
+      else if (!preserveMatching) render();
     }
   } catch (error) {
     if (!game && openingError !== error.message) {
@@ -322,8 +370,12 @@ app.addEventListener('submit', async event => {
       localStorage.setItem('gobble-host-' + result.code, result.token);
       localStorage.setItem('gobble-last-host', result.code);
       location.href = gameLink('host', result.code);
+    } else if (id === 'guess-form') {
+      const guesses = Object.fromEntries([...form].filter(([, choice]) => choice));
+      game = await request('/' + code + '/guess', { guesses });
+      flash('Identity guesses saved.');
     } else if (id === 'join-form') {
-      const result = await request('/' + code + '/join', { name: form.get('name'), family: form.has('family'), avatar: form.get('avatar') ?? undefined }, null);
+      const result = await request('/' + code + '/join', { name: form.get('name'), realName: form.get('realName') ?? undefined, family: form.has('family'), avatar: form.get('avatar') ?? undefined }, null);
       playerToken = result.token;
       localStorage.setItem('gobble-agent-' + code, playerToken);
       game = result;

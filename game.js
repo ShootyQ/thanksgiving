@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import QRCode from 'qrcode';
 import { missions } from './missions.js';
 import { avatars } from './public/avatars.js';
+import { registerIdentity, openIdentityRound, saveGuesses, identityScore, identityView } from './identity.js';
 
 const token = () => randomBytes(24).toString('base64url');
 const missionById = new Map(missions.map(mission => [mission.id, mission]));
@@ -43,12 +44,20 @@ function view(game, auth) {
   const host = !!auth && auth === game.host;
   const player = Object.values(game.players).find(item => item.token === auth);
   const phase = status(game);
-  const standings = Object.values(game.players).map(publicPlayer)
+  const revealed = phase === 'revealed';
+  const finalPlayer = guest => {
+    const row = publicPlayer(guest);
+    if (!revealed) return row;
+    const identity = identityScore(game, guest);
+    return { ...row, ...identity, score: row.score + identity.identityXp };
+  };
+  const standings = Object.values(game.players).map(finalPlayer)
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
     code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
     revealIndex: game.revealIndex,
-    player: player ? { ...publicPlayer(player), missions: active(player).map(details) } : null,
+    identity: identityView(game, player, revealed),
+    player: player ? { ...finalPlayer(player), missions: active(player).map(details) } : null,
     reveal: phase === 'revealed' ? standings.map(row => ({
       ...row, missions: game.players[row.id].assignments.map(details),
     })) : null,
@@ -117,7 +126,7 @@ export const gameHandler = store => async (request, response) => {
       } while (!(await store.create(game)));
       return send(response, 201, { token: game.host, ...view(game, game.host) });
     }
-    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr))?$/i);
+    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr|identity-open|guess))?$/i);
     const missing = () => fail(404, 'Game not found. Check the join code.');
     if (!route) missing();
     const code = route[1].toUpperCase();
@@ -164,7 +173,7 @@ function updateGame(game, action, auth, input) {
         fail(409, 'Another agent claimed that avatar. Choose a different one.');
       }
     }
-    const player = { id, name, ...(avatar ? { avatar } : {}), token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
+    const player = { id, name, ...registerIdentity(game, input, fail), ...(avatar ? { avatar } : {}), token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
     game.players[id] = player;
     for (let slot = 0; slot < 3; slot++) deal(game, player);
     if (active(player).length < 3) {
@@ -199,6 +208,15 @@ function updateGame(game, action, auth, input) {
       fail(400, 'Invalid mission result.');
     }
     deal(game, player);
+  } else if (action === 'identity-open') {
+    if (auth !== game.host) fail(403, 'Only the game leader can open the identity round.');
+    if (status(game) !== 'open') fail(409, 'The game is closed.');
+    openIdentityRound(game, fail);
+  } else if (action === 'guess') {
+    const player = Object.values(game.players).find(item => item.token === auth);
+    if (!player) fail(403, 'Join this game to submit a guess.');
+    if (status(game) !== 'open') fail(409, 'Identity guessing is closed.');
+    saveGuesses(game, player, input.guesses, fail);
   } else if (action === 'advance') {
     if (auth !== game.host) fail(403, 'Only the game leader can advance the reveal.');
     if (status(game) !== 'revealed') fail(409, 'The reveal opens at cutoff.');

@@ -70,18 +70,33 @@ test('host, guests, and TV share scores while missions stay private until reveal
   const host = await gameRequest('', null, { cutoff }, 201);
   const path = '/' + host.code;
   const [maya, alex] = await Promise.all([
-    gameRequest(path + '/join', null, { name: 'Maya', family: true, avatar: 'turkey' }, 201),
-    gameRequest(path + '/join', null, { name: 'Alex' }, 201),
+    gameRequest(path + '/join', null, { name: 'Maya', realName: 'Morgan W', family: true, avatar: 'turkey' }, 201),
+    gameRequest(path + '/join', null, { name: 'Alex', realName: 'Avery C' }, 201),
   ]);
   assert.equal(maya.player.missions.length, 3);
   assert.equal(maya.player.avatar, 'turkey');
   await gameRequest(path + '/join', null, { name: 'Guest', avatar: 'unknown' }, 400);
   const claim = name => fetch(origin + '/api/games' + path + '/join', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, avatar: 'fox' }),
+    body: JSON.stringify({ name, avatar: 'fox', realName: 'Blake R' }),
   });
   const claims = await Promise.all([claim('Blair'), claim('Casey')]);
   assert.deepEqual(claims.map(response => response.status).sort(), [201, 409]);
+  const extra = await claims.find(response => response.status === 201).json();
+  assert.equal(maya.identity.choices, undefined);
+  await gameRequest(path + '/identity-open', maya.token, {}, 403);
+  await gameRequest(path + '/identity-open', host.token, {});
+  const privateRound = (await gameRequest(path, maya.token)).identity;
+  assert.deepEqual(privateRound.choices.map(choice => choice.name), ['Avery C', 'Blake R']);
+  assert.ok(privateRound.choices.every(choice => Object.keys(choice).length === 2));
+  assert.equal(privateRound.matches, undefined);
+  assert.equal((await gameRequest(path, host.token)).identity.choices, undefined);
+  const avery = privateRound.choices[0].id;
+  await gameRequest(path + '/guess', maya.token, { guesses: { [alex.player.id]: avery, [extra.player.id]: avery } }, 409);
+  const guessed = await gameRequest(path + '/guess', maya.token, { guesses: { [alex.player.id]: avery } });
+  assert.equal(guessed.player.identified, undefined);
+  assert.equal(guessed.player.score, 0);
+  assert.equal(guessed.identity.matches, undefined);
   const otherGame = await gameRequest('', null, { cutoff }, 201);
   await gameRequest('/' + otherGame.code + '/join', null, { name: 'Sam', avatar: 'fox' }, 201);
   assert.ok(maya.player.missions.every(mission => mission.family));
@@ -113,6 +128,8 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.equal(tv.standings.filter(player => player.avatar === 'fox').length, 1);
   assert.equal(tv.standings.find(player => player.name === 'Maya').avatar, 'turkey');
   assert.equal(tv.reveal, null);
+  assert.equal(tv.identity.choices, undefined);
+  assert.ok(!JSON.stringify(tv).includes('Avery C'));
   assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points, title: first.title, description: first.description }]);
   assert.equal(tv.standings[0].name, 'Maya');
   const qr = await fetch(origin + '/api/games' + path + '/qr');
@@ -128,6 +145,15 @@ test('host, guests, and TV share scores while missions stay private until reveal
   await gameRequest(path + '/advance', alex.token, { step: 1 }, 403);
   const reveal = await gameRequest(path);
   assert.equal(reveal.phase, 'revealed');
+  assert.equal(reveal.standings[0].identified, 1);
+  assert.equal(reveal.standings[0].score, first.points - 75 + 600);
+  assert.ok(!JSON.stringify(reveal).includes('Avery C'));
+  const privateReveal = await gameRequest(path, maya.token);
+  assert.deepEqual(privateReveal.identity.matches.find(match => match.agentId === alex.player.id), {
+    agentId: alex.player.id, realName: 'Avery C', correct: true,
+  });
+  assert.equal((await gameRequest(path, maya.token)).player.score, privateReveal.player.score);
+  await gameRequest(path + '/guess', maya.token, { guesses: {} }, 409);
   assert.deepEqual(reveal.reveal[0].missions.slice(0, 3).map(mission => mission.state), ['completed', 'abandoned', 'sniffed']);
   assert.equal((await gameRequest(path + '/advance', host.token, { step: 1 })).revealIndex, 1);
 });
