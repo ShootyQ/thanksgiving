@@ -2,12 +2,16 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import QRCode from 'qrcode';
 import { missions } from './missions.js';
+import { avatars } from './public/avatars.js';
 
 const token = () => randomBytes(24).toString('base64url');
 const missionById = new Map(missions.map(mission => [mission.id, mission]));
 const status = game => Date.now() >= game.cutoff ? 'revealed' : 'open';
 const active = player => player.assignments.filter(item => item.state === 'active');
-const publicPlayer = ({ id, name, score, completed }) => ({ id, name, score, completed });
+const avatarIds = new Set(avatars.map(avatar => avatar.id));
+const publicPlayer = ({ id, name, score, completed, avatar }) => ({
+  id, name, score, completed, ...(avatar ? { avatar } : {}),
+});
 const sniffedPenalty = 50;
 
 function details(assignment) {
@@ -42,7 +46,7 @@ function view(game, auth) {
   const standings = Object.values(game.players).map(publicPlayer)
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
-    code: game.code, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
+    code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
     revealIndex: game.revealIndex,
     player: player ? { ...publicPlayer(player), missions: active(player).map(details) } : null,
     reveal: phase === 'revealed' ? standings.map(row => ({
@@ -81,6 +85,7 @@ function parseBody(raw) {
 const assets = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/config.js': ['config.js', 'text/javascript; charset=utf-8'],
+  '/avatars.js': ['avatars.js', 'text/javascript; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
 };
@@ -152,7 +157,14 @@ function updateGame(game, action, auth, input) {
     const name = typeof input.name === 'string' ? input.name.trim() : '';
     if (!name || name.length > 24) fail(400, 'Enter a name between 1 and 24 characters.');
     const id = Object.keys(game.players).length + 1;
-    const player = { id, name, token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
+    const avatar = input.avatar;
+    if (avatar !== undefined) {
+      if (!avatarIds.has(avatar)) fail(400, 'Choose a valid avatar.');
+      if (Object.values(game.players).some(guest => guest.avatar === avatar)) {
+        fail(409, 'Another agent claimed that avatar. Choose a different one.');
+      }
+    }
+    const player = { id, name, ...(avatar ? { avatar } : {}), token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
     game.players[id] = player;
     for (let slot = 0; slot < 3; slot++) deal(game, player);
     if (active(player).length < 3) {

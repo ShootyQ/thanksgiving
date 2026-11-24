@@ -1,4 +1,5 @@
 import { apiBase } from './config.js?v=2';
+import { avatars } from './avatars.js';
 
 const svgPaths = {
   target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/>',
@@ -84,16 +85,52 @@ function countdown() {
 }
 const qr = () => `<img class="qr" src="${apiBase}/api/games/${game.code}/qr?target=${encodeURIComponent(new URL(joinLink(), location.href).href)}" alt="Scan to join Operation Gobble" width="116" height="116">`;
 
+const avatarsById = new Map(avatars.map(avatar => [avatar.id, avatar]));
+const claimedAvatars = () => new Set(game.standings.map(player => player.avatar).filter(avatar => avatarsById.has(avatar)));
+const avatarBadge = avatar => avatar ? `<span class="avatar-badge avatar-color-${avatar.color}" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round" stroke-linecap="round"><path d="${avatar.path}"/></svg></span>` : '';
+
+function avatarPicker() {
+  return `<fieldset class="avatar-picker">
+    <legend>Choose your avatar</legend>
+    <p id="avatar-status" role="status"></p>
+    <div class="avatar-options">${avatars.map(avatar => `<label class="avatar-option">
+      <input type="radio" name="avatar" value="${avatar.id}" required>
+      <span class="avatar-tile">${avatarBadge(avatar)}<span>${avatar.name}</span><small>Taken</small></span>
+    </label>`).join('')}</div>
+  </fieldset>`;
+}
+
+function updateAvatarPicker() {
+  const form = document.querySelector('#join-form');
+  if (!form || !game.avatarSelection) return;
+  const claims = claimedAvatars();
+  let lostSelection = false;
+  for (const choice of form.querySelectorAll('input[name="avatar"]')) {
+    choice.disabled = claims.has(choice.value);
+    if (choice.disabled && choice.checked) {
+      choice.checked = false;
+      lostSelection = true;
+    }
+  }
+  const available = avatars.length - claims.size;
+  form.querySelector('button[type="submit"]').disabled = available === 0;
+  const status = form.querySelector('#avatar-status');
+  if (lostSelection || status.dataset.claimLost) status.dataset.claimLost = form.querySelector('input[name="avatar"]:checked') ? '' : 'true';
+  const message = available === 0 ? 'All avatars have been claimed.' :
+    status.dataset.claimLost ? 'That avatar was claimed. Choose another.' : `${available} of ${avatars.length} available`;
+  if (status.textContent !== message) status.textContent = message;
+}
+
 function agent() {
   if (code && !game?.player) {
     if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
     return `${header('SECURE ACCESS', 'Join the operation', `Game code ${game.code}`)}
-      <section class="panel form-panel">${game.phase === 'open' ? `<form id="join-form"><label>Your name<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="Enter your name"></label><label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
+      <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${game.phase === 'open' ? `<form id="join-form"><label>Your name<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="Enter your name"></label>${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
   }
   const player = game?.player || demo;
   const playing = !game || game.phase === 'open';
   return `<div class="dossier-banner">
-    <div><div class="kicker banner-label">${icon('lock')} CLASSIFIED <span></span> ${agentLabel(player.id)}</div>
+    <div><div class="kicker banner-label">${avatarBadge(avatarsById.get(player.avatar)) || icon('lock')} CLASSIFIED <span class="banner-dot"></span> ${agentLabel(player.id)}</div>
     <h1>Agent dossier<span>.</span></h1><p>Your missions are for your eyes only.</p></div>
     <div class="banner-mark" aria-hidden="true">${icon('target')}</div>
     <div class="status"><i></i>${phaseLabel()}</div>
@@ -141,7 +178,7 @@ function host() {
 
 function standings() {
   if (!game.standings.length) return empty('Waiting for agents to join.');
-  return `<ol class="standings">${game.standings.map((row, index) => `<li><span class="rank">${String(index + 1).padStart(2, '0')}</span><strong>${escape(row.name)}</strong><span class="standing-points">${xp(row.score)} <small>XP</small></span></li>`).join('')}</ol>`;
+  return `<ol class="standings">${game.standings.map((row, index) => `<li><span class="rank">${String(index + 1).padStart(2, '0')}</span><strong class="standing-agent">${avatarBadge(avatarsById.get(row.avatar))}<span>${escape(row.name)}</span></strong><span class="standing-points">${xp(row.score)} <small>XP</small></span></li>`).join('')}</ol>`;
 }
 
 function tv() {
@@ -166,7 +203,7 @@ function tv() {
   <div class="command-layout">
     <section class="command-panel command-feed">
       ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
-        <h2>${escape(reveal.name)}’s missions</h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
+        <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
         <div class="tv-alert" role="status">${alertEvent ? `<div class="kicker">${icon('check')} MISSION COMPLETE</div><strong>${escape(alertEvent.name)}</strong><p>${escape(alertEvent.description || 'Completed a mission.')}</p><span>+${xp(alertEvent.points)} XP</span>` : ''}</div>
         ${reports.length ? `<ul class="reports">${reports.map(report => `<li><span class="report-text"><strong>${escape(report.name)} <span class="report-title">/ ${escape(report.title || 'Mission complete')}</span></strong>${report.description ? `<span>${escape(report.description)}</span>` : ''}</span><small>+${xp(report.points)} XP</small></li>`).join('')}</ul>` : empty('Awaiting the first completed mission.')}`}
@@ -182,6 +219,7 @@ function render() {
   app.classList.toggle('tv-view', page === 'tv');
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
   app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : agent();
+  updateAvatarPicker();
 }
 
 async function request(path = '', data, useToken = page === 'host' ? hostToken : page === 'agent' ? playerToken : null) {
@@ -249,8 +287,11 @@ async function refresh() {
       lastSequence = latest;
     }
     if (JSON.stringify(game) !== JSON.stringify(next)) {
+      const preserveJoinForm = document.querySelector('#join-form') && next.phase === 'open' &&
+        !next.player && game.avatarSelection === next.avatarSelection;
       game = next;
-      render();
+      if (preserveJoinForm) updateAvatarPicker();
+      else render();
     }
   } catch (error) {
     if (!game && openingError !== error.message) {
@@ -259,7 +300,7 @@ async function refresh() {
     }
   } finally {
     const interval = game?.phase === 'revealed' && page === 'agent' ? 60000
-      : page === 'tv' ? 1200 : page === 'host' ? 4000 : 12000;
+      : page === 'tv' ? 1200 : document.querySelector('#join-form') ? 2400 : page === 'host' ? 4000 : 12000;
     nextRead = Date.now() + interval;
     refreshing = false;
   }
@@ -279,7 +320,7 @@ app.addEventListener('submit', async event => {
       localStorage.setItem('gobble-last-host', result.code);
       location.href = gameLink('host', result.code);
     } else if (id === 'join-form') {
-      const result = await request('/' + code + '/join', { name: form.get('name'), family: form.has('family') }, null);
+      const result = await request('/' + code + '/join', { name: form.get('name'), family: form.has('family'), avatar: form.get('avatar') ?? undefined }, null);
       playerToken = result.token;
       localStorage.setItem('gobble-agent-' + code, playerToken);
       game = result;
@@ -290,9 +331,14 @@ app.addEventListener('submit', async event => {
     }
   } catch (error) {
     flash(error.message);
+    if (id === 'join-form') nextRead = 0;
   } finally {
     pending = false;
   }
+});
+
+app.addEventListener('change', event => {
+  if (event.target.matches('#join-form input[name="avatar"]')) updateAvatarPicker();
 });
 
 app.addEventListener('click', async event => {

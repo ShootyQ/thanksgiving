@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { gameHandler } from '../game.js';
+import { avatars } from '../public/avatars.js';
 import { missions } from '../missions.js';
 
 test('mission deck has 451 unique assignments and a family selection', () => {
@@ -15,6 +16,13 @@ test('mission deck has 451 unique assignments and a family selection', () => {
   assert.equal(new Set(missions.map(mission => mission.description)).size, missions.length);
   assert.ok(missions.filter(mission => mission.family).length >= 100);
   assert.equal(missions.filter(mission => mission.targeted).length, 40);
+});
+
+test('avatar catalog offers 30 distinct badges', () => {
+  assert.equal(avatars.length, 30);
+  for (const key of ['id', 'name', 'path']) {
+    assert.equal(new Set(avatars.map(avatar => avatar[key])).size, avatars.length);
+  }
 });
 
 test('host, guests, and TV share scores while missions stay private until reveal', { timeout: 15000 }, async t => {
@@ -62,10 +70,20 @@ test('host, guests, and TV share scores while missions stay private until reveal
   const host = await gameRequest('', null, { cutoff }, 201);
   const path = '/' + host.code;
   const [maya, alex] = await Promise.all([
-    gameRequest(path + '/join', null, { name: 'Maya', family: true }, 201),
+    gameRequest(path + '/join', null, { name: 'Maya', family: true, avatar: 'turkey' }, 201),
     gameRequest(path + '/join', null, { name: 'Alex' }, 201),
   ]);
   assert.equal(maya.player.missions.length, 3);
+  assert.equal(maya.player.avatar, 'turkey');
+  await gameRequest(path + '/join', null, { name: 'Guest', avatar: 'unknown' }, 400);
+  const claim = name => fetch(origin + '/api/games' + path + '/join', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, avatar: 'fox' }),
+  });
+  const claims = await Promise.all([claim('Blair'), claim('Casey')]);
+  assert.deepEqual(claims.map(response => response.status).sort(), [201, 409]);
+  const otherGame = await gameRequest('', null, { cutoff }, 201);
+  await gameRequest('/' + otherGame.code + '/join', null, { name: 'Sam', avatar: 'fox' }, 201);
   assert.ok(maya.player.missions.every(mission => mission.family));
   const alexMissions = new Set(alex.player.missions.map(mission => mission.missionId));
   assert.ok(maya.player.missions.every(mission => !alexMissions.has(mission.missionId)));
@@ -92,6 +110,8 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.ok(sniffed.player.missions.every(mission => ![first, second, third].some(previous => mission.id === previous.id)));
   const tv = await gameRequest(path);
   assert.equal(tv.player, null);
+  assert.equal(tv.standings.filter(player => player.avatar === 'fox').length, 1);
+  assert.equal(tv.standings.find(player => player.name === 'Maya').avatar, 'turkey');
   assert.equal(tv.reveal, null);
   assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points, title: first.title, description: first.description }]);
   assert.equal(tv.standings[0].name, 'Maya');
