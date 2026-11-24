@@ -146,7 +146,7 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 }
 .command-mode .topbar { background: #111c17; border-bottom: 1px solid var(--command-line); }
 .command-mode footer { color: var(--command-muted); border-color: var(--command-line); }
-.command-mode main { max-width: 1460px; padding-top: 25px; }
+.command-mode main { max-width: 1760px; padding-top: 16px; }
 .command-banner {
   position: relative;
   isolation: isolate;
@@ -155,8 +155,7 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  min-height: 245px;
-  padding: clamp(22px, 4vw, 54px);
+  padding: clamp(16px, 2.2vw, 34px);
   border: 1px solid #536754;
   border-radius: 4px;
   background-color: #1a2b21;
@@ -182,15 +181,21 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .signal { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--command-green); font: 700 clamp(.68rem, 1.2vw, .9rem) var(--mono); letter-spacing: .13em; }
 .signal i { width: 8px; height: 8px; border-radius: 50%; background: var(--command-green); box-shadow: 0 0 12px #b6ebaca0; }
 .signal-code { color: var(--command-muted); }
-.command-heading h1 { font-size: clamp(2.65rem, 7vw, 7.25rem); margin: 14px 0 10px; }
+.command-heading h1 { font-size: clamp(2.4rem, min(5.8vw, 9vh), 6rem); margin: 8px 0; }
 .command-heading em { color: var(--command-amber); font-weight: inherit; }
 .command-heading p { color: var(--command-muted); font: 700 clamp(.78rem, 1.4vw, 1.05rem) var(--mono); letter-spacing: .16em; text-transform: uppercase; }
-.command-controls { flex-shrink: 0; border: 1px solid var(--command-line); background: #101c16eb; padding: 15px; display: grid; gap: 10px; justify-items: start; }
+.command-tools { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; align-items: stretch; }
+.command-controls, .command-join { border: 1px solid var(--command-line); background: #101c16eb; padding: 8px 12px; }
+.command-controls { display: grid; gap: 5px; justify-items: start; align-content: center; }
+.command-controls .secondary { min-height: 32px; }
+.command-join { display: grid; gap: 5px; place-items: center; align-content: center; }
+.command-mode .command-join .qr { width: clamp(78px, 7vw, 120px); height: auto; margin: 0; }
+.command-join .kicker { color: var(--command-muted); font-size: .65rem; }
 .command-controls strong { font: 700 clamp(1.15rem, 3vw, 2.6rem) var(--mono); letter-spacing: -.06em; color: var(--command-green); }
 .command-controls .kicker { color: var(--command-muted); }
 .command-mode .secondary { background: #26382d; border-color: #536754; color: var(--command-light); }
 .command-mode .secondary:hover { background: #354b3d; }
-.command-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(245px, 1fr); gap: 18px; align-items: start; margin-top: 18px; }
+.command-layout { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(280px, 1fr); gap: 14px; align-items: start; margin-top: 14px; }
 .command-panel { min-width: 0; padding: clamp(16px, 2.3vw, 30px); border: 1px solid var(--command-line); border-radius: 4px; background: var(--command-surface); }
 .command-panel .kicker { color: var(--command-green); margin-bottom: 8px; }
 .command-panel h2 { font-size: clamp(1.75rem, 3.2vw, 3rem); }
@@ -198,10 +203,28 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .command-panel .standings li { border-color: var(--command-line); }
 .command-panel .rank { color: var(--command-muted); }
 .command-panel .standings li:first-child, .command-panel .standing-points { color: var(--command-amber); }
-.command-sidebar { display: grid; grid-template-columns: 1fr; gap: 18px; }
-.command-mode .join-panel { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.command-mode .join-panel .qr { width: clamp(90px, 10vw, 138px); height: auto; margin: 0; }
-.join-panel strong { display: block; color: var(--command-light); font: 700 clamp(1.1rem, 2vw, 1.7rem) var(--mono); margin-top: 6px; }
+.command-roster .standings { display: grid; gap: 7px 10px; }
+.command-roster .standings li {
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 8px 10px;
+  background: #101c16;
+  border: 1px solid var(--command-line);
+  border-radius: 4px;
+  font-size: clamp(1rem, min(2vw, 3vh), 2rem);
+  line-height: 1.2;
+}
+.command-roster .standings li:first-child { background: #282a1e; border-color: #886e46; }
+.command-roster .standings .rank, .command-roster .standings small { font-size: .65em; }
+.command-roster .standing-points { white-space: nowrap; }
+.command-roster .standing-agent span:last-child { overflow-wrap: anywhere; }
+.command-roster .avatar-badge { width: clamp(1.45rem, min(2.75vw, 4.5vh), 3.15rem); height: auto; aspect-ratio: 1; }
+@media (min-width: 1000px) {
+  .command-mode .topbar { min-height: 48px; padding-block: 5px; }
+  .command-mode footer { display: none; }
+  .command-roster .standings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .command-feed { max-height: max(240px, calc(100dvh - clamp(218px, 27vh, 305px))); overflow: auto; }
+}
 .reports { list-style: none; padding: 0; margin: 16px 0 0; }
 .reports li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px 0; border-top: 1px solid var(--command-line); overflow-wrap: anywhere; }
 .report-text { display: grid; gap: 5px; }
@@ -213,9 +236,9 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .command-mode .tv-alert .kicker { color: var(--command-amber); }
 .command-mode .tv-alert strong { font: 700 clamp(1.7rem, 4vw, 3.4rem)/1 Georgia, serif; }
 .command-mode .tv-alert p { margin: 6px 0; color: var(--command-light); }
-@media (max-width: 710px) {
+@media (max-width: 800px) {
   .command-layout { grid-template-columns: minmax(0, 1fr); }
-  .command-banner { flex-wrap: wrap; }
+  .command-banner { flex-wrap: wrap; gap: 12px; }
   .command-controls { grid-template-columns: auto auto; align-items: center; }
   .command-controls .kicker { grid-column: 1 / -1; }
 }
@@ -247,3 +270,16 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .avatar-color-4 { --badge-bg: #efe2c8; --badge-ink: #604a23; }
 .avatar-color-5 { --badge-bg: #e5dcec; --badge-ink: #573974; }
 .standing-agent { display: flex; align-items: center; gap: .45em; min-width: 0; }
+
+@media (min-width: 1000px) and (max-height: 1100px) {
+  .command-mode main { padding-top: 10px; }
+  .command-banner { padding: 12px 18px; }
+  .command-heading h1 { font-size: clamp(2.35rem, 7.5vh, 4.75rem); }
+  .command-mode .command-join .qr { width: clamp(64px, 11vh, 115px); }
+  .command-layout { margin-top: 10px; }
+  .command-panel { padding: 12px 14px; }
+  .command-panel h2 { font-size: clamp(1.5rem, 3.7vh, 2.25rem); }
+  .command-panel .kicker { margin-bottom: 5px; }
+  .command-roster .standings { gap: 5px 8px; margin-top: 8px; }
+  .command-roster .standings li { padding: 3px 8px; font-size: clamp(1rem, 2.7vh, 1.65rem); }
+}

@@ -194,24 +194,27 @@ function tv() {
       <h1>Operation <em>Gobble</em></h1>
       <p>${live ? 'Mission control' : 'Mission debrief'}</p>
     </div>
-    <div class="command-controls">
-      <div class="kicker">${live ? 'TIME TO EXTRACTION' : 'OPERATION STATUS'}</div>
-      <strong ${live ? 'data-clock' : ''}>${live ? countdown() : 'COMPLETE'}</strong>
-      <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button>
+    <div class="command-tools">
+      <div class="command-controls">
+        <div class="kicker">${live ? 'TIME TO EXTRACTION' : 'OPERATION STATUS'}</div>
+        <strong ${live ? 'data-clock' : ''}>${live ? countdown() : 'COMPLETE'}</strong>
+        <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button>
+      </div>
+      ${live ? `<div class="command-join">${qr()}<div class="kicker">SCAN TO JOIN</div></div>` : ''}
     </div>
   </section>
   <div class="command-layout">
-    <section class="command-panel command-feed">
+    <section class="command-panel command-roster">
+      <div class="kicker">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</div>
+      <h2>${live ? 'Standings' : 'Final standings'}</h2>${standings()}
+    </section>
+    <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
       ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
         <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
         <div class="tv-alert" role="status">${alertEvent ? `<div class="kicker">${icon('check')} MISSION COMPLETE</div><strong>${escape(alertEvent.name)}</strong><p>${escape(alertEvent.description || 'Completed a mission.')}</p><span>+${xp(alertEvent.points)} XP</span>` : ''}</div>
         ${reports.length ? `<ul class="reports">${reports.map(report => `<li><span class="report-text"><strong>${escape(report.name)} <span class="report-title">/ ${escape(report.title || 'Mission complete')}</span></strong>${report.description ? `<span>${escape(report.description)}</span>` : ''}</span><small>+${xp(report.points)} XP</small></li>`).join('')}</ul>` : empty('Awaiting the first completed mission.')}`}
     </section>
-    <aside class="command-sidebar">
-      <section class="command-panel"><div class="kicker">${icon('target')} AGENT RANKINGS</div><h2>${live ? 'Standings' : 'Final standings'}</h2>${standings()}</section>
-      ${live ? `<section class="command-panel join-panel">${qr()}<div class="kicker">SCAN TO JOIN<strong>${game.code}</strong></div></section>` : ''}
-    </aside>
   </div>`;
 }
 
