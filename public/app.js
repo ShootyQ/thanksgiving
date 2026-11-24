@@ -1,4 +1,4 @@
-import { apiBase } from './config.js';
+import { apiBase } from './config.js?v=2';
 
 const svgPaths = {
   target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/>',

@@ -29,12 +29,13 @@ jobs:
       - run: npm test
       - name: Configure live game API
         env:
-          GOBBLE_API_URL: ${{ vars.GOBBLE_API_URL || 'https://us-central1-savemhq.cloudfunctions.net/gobble' }}
+          GOBBLE_API_URL: ${{ vars.GOBBLE_API_URL }}
         run: |
           node --input-type=module -e '
             import { writeFileSync } from "node:fs";
             const value = process.env.GOBBLE_API_URL?.trim() || "";
-            if (value && new URL(value).protocol !== "https:") throw new Error("Use an HTTPS API URL");
+            if (!value) process.exit(0);
+            if (new URL(value).protocol !== "https:") throw new Error("Use an HTTPS API URL");
             writeFileSync("public/config.js", "export const apiBase = " + JSON.stringify(value.replace(/\/+$/, "")) + ";\n");
           '
       - uses: actions/upload-pages-artifact@v3
