@@ -7,12 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { gameHandler } from '../game.js';
 import { missions } from '../missions.js';
 
-test('mission deck has around 150 unique assignments and a family selection', () => {
-  assert.equal(missions.length, 151);
+test('mission deck has 451 unique assignments and a family selection', () => {
+  assert.equal(missions.length, 451);
   assert.equal(new Set(missions.map(mission => mission.description)).size, missions.length);
   assert.ok(missions.filter(mission => mission.family).length >= 100);
+  assert.equal(missions.filter(mission => mission.targeted).length, 40);
 });
 
 test('host, guests, and TV share scores while missions stay private until reveal', { timeout: 15000 }, async t => {
@@ -68,7 +70,7 @@ test('host, guests, and TV share scores while missions stay private until reveal
   const alexMissions = new Set(alex.player.missions.map(mission => mission.missionId));
   assert.ok(maya.player.missions.every(mission => !alexMissions.has(mission.missionId)));
   assert.equal((await gameRequest(path, host.token)).player, null);
-  const [first, second] = maya.player.missions;
+  const [first, second, third] = maya.player.missions;
   const update = { assignmentId: first.assignmentId, result: 'completed' };
   const attempts = await Promise.allSettled([
     gameRequest(path + '/mission', maya.token, update),
@@ -84,10 +86,14 @@ test('host, guests, and TV share scores while missions stay private until reveal
   await gameRequest(path + '/mission', alex.token, { assignmentId: second.assignmentId, result: 'completed' }, 409);
   const abandoned = await gameRequest(path + '/mission', maya.token, { assignmentId: second.assignmentId, result: 'abandoned' });
   assert.equal(abandoned.player.score, first.points - 25);
+  const sniffed = await gameRequest(path + '/mission', maya.token, { assignmentId: third.assignmentId, result: 'sniffed' });
+  assert.equal(sniffed.player.score, first.points - 75);
+  assert.equal(sniffed.player.completed, 1);
+  assert.ok(sniffed.player.missions.every(mission => ![first, second, third].some(previous => mission.id === previous.id)));
   const tv = await gameRequest(path);
   assert.equal(tv.player, null);
   assert.equal(tv.reveal, null);
-  assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points }]);
+  assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points, title: first.title, description: first.description }]);
   assert.equal(tv.standings[0].name, 'Maya');
   const qr = await fetch(origin + '/api/games' + path + '/qr');
   assert.equal(qr.headers.get('content-type'), 'image/png');
@@ -96,12 +102,45 @@ test('host, guests, and TV share scores while missions stay private until reveal
   await stop();
   await start();
   const restored = await gameRequest(path, maya.token);
-  assert.deepEqual(restored.player, abandoned.player);
+  assert.deepEqual(restored.player, sniffed.player);
   await delay(Math.max(0, cutoff - Date.now() + 30));
   await gameRequest(path + '/mission', maya.token, { assignmentId: restored.player.missions[0].assignmentId, result: 'completed' }, 409);
   await gameRequest(path + '/advance', alex.token, { step: 1 }, 403);
   const reveal = await gameRequest(path);
   assert.equal(reveal.phase, 'revealed');
-  assert.deepEqual(reveal.reveal[0].missions.slice(0, 2).map(mission => mission.state), ['completed', 'abandoned']);
+  assert.deepEqual(reveal.reveal[0].missions.slice(0, 3).map(mission => mission.state), ['completed', 'abandoned', 'sniffed']);
   assert.equal((await gameRequest(path + '/advance', host.token, { step: 1 })).revealIndex, 1);
+});
+
+test('targeted cards name another joined agent and retain that name when reported', async () => {
+  const available = missions.filter(mission => mission.targeted).slice(0, 3);
+  const remainingIds = new Set(available.map(mission => mission.id));
+  const game = {
+    code: 'ABC123', cutoff: Date.now() + 60000, host: 'leader', sequence: 0,
+    revealIndex: 0, events: [],
+    players: { 1: {
+      id: 1, name: 'Carlson', token: 'carlson', score: 0, completed: 0,
+      assignments: missions.filter(mission => !remainingIds.has(mission.id))
+        .map(mission => ({ missionId: mission.id, state: 'abandoned' })),
+    } },
+  };
+  const handler = gameHandler({ update: (_code, update) => update(game) });
+  async function post(action, input, expected, authorization) {
+    let result;
+    await handler({
+      method: 'POST', url: '/api/games/ABC123/' + action, headers: { authorization },
+      rawBody: Buffer.from(JSON.stringify(input)),
+    }, {
+      writeHead(status) { assert.equal(status, expected); },
+      end(body) { result = JSON.parse(body); },
+    });
+    return result;
+  }
+  const joined = await post('join', { name: 'Maya' }, 201);
+  assert.deepEqual(new Set(joined.player.missions.map(mission => mission.id)), remainingIds);
+  assert.ok(joined.player.missions.every(mission => mission.description.includes('Agent Carlson (#001)')));
+  const first = joined.player.missions[0];
+  const completed = await post('mission', { assignmentId: first.assignmentId, result: 'completed' }, 200, 'Bearer ' + joined.token);
+  assert.equal(completed.events[0].description, first.description);
+  assert.equal(completed.player.missions.length, 2);
 });

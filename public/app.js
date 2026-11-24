@@ -34,6 +34,18 @@ let noticeTimer;
 let pending = false;
 let openingError = '';
 let nextRead = 0;
+const confirmation = document.querySelector('#mission-confirm');
+const penalty = () => game?.sniffedPenalty ?? 50;
+const resultMessages = {
+  completed: () => 'Mission completed.',
+  abandoned: () => 'Mission abandoned. −25 XP',
+  sniffed: () => `Cover blown. −${penalty()} XP`,
+};
+const resultLabels = {
+  completed: ['Confirm completion', 'Confirm completion'],
+  abandoned: ['Abandon mission?', 'Confirm abandonment'],
+  sniffed: ['Was your cover blown?', 'Confirm sniffed out'],
+};
 const escape = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const gameLink = (view, gameCode = code) => `${location.pathname}?view=${view}${gameCode ? '&game=' + encodeURIComponent(gameCode) : ''}`;
@@ -61,7 +73,7 @@ function missionCard(mission, index, enabled) {
   return `<article class="mission ${mission.difficulty.toLowerCase()}">
     <div class="mission-meta"><span class="difficulty"><i></i>${mission.difficulty}</span><span>MISSION ${String(index + 1).padStart(2, '0')}</span><span class="points">+${mission.points} XP</span></div>
     <h3>${escape(mission.title)}</h3><p>${escape(mission.description)}</p>
-    ${enabled ? `<div class="mission-actions"><button class="primary" data-result="completed" data-id="${mission.assignmentId}">${icon('check')} Mark as completed</button><button class="text-button" data-result="abandoned" data-id="${mission.assignmentId}">Abandon</button></div>` : ''}
+    ${enabled ? `<div class="mission-actions"><button class="primary" data-result="completed" data-id="${mission.assignmentId}">${icon('check')} Mark as completed</button><button class="text-button" data-result="abandoned" data-id="${mission.assignmentId}">Abandon</button>${(!game || game.sniffedPenalty) ? `<button class="text-button blown-button" data-result="sniffed" data-id="${mission.assignmentId}">Sniffed out</button>` : ''}</div>` : ''}
   </article>`;
 }
 
@@ -135,20 +147,40 @@ function standings() {
 function tv() {
   if (!game) return `${header('LIVE FEED', 'TV scoreboard', escape(openingError || (code ? 'Contacting headquarters…' : 'Enter a game code to watch the live rankings.')))}
     <form id="tv-form" class="panel form-panel"><label>Game code<input name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="A1B2C3" value="${escape(code)}"></label><button class="primary">Open scoreboard</button></form>`;
+  const live = game.phase === 'open';
   const reveal = game.reveal?.[game.revealIndex];
-  return `<div class="tv-header">${header('LIVE FEED · ' + game.code, game.phase === 'revealed' ? 'Mission reveal' : 'TV scoreboard', game.phase === 'open' ? 'Standings update as agents report in.' : 'Final standings')}
-    <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button></div>
-    <div class="tv-alert" role="status">${alertEvent ? `<strong>${escape(alertEvent.name)}</strong> completed a mission <span>+${alertEvent.points} XP</span>` : ''}</div>
-    <div class="dashboard"><section class="panel">
-    <h2>Standings</h2>${standings()}</section>
-    <aside><section class="panel briefing"><div class="kicker">${game.phase === 'open' ? 'TIME REMAINING' : 'OPERATION STATUS'}</div>
-    <h3 ${game.phase === 'open' ? 'data-clock' : ''}>${game.phase === 'open' ? countdown() : phaseLabel()}</h3>
-    ${game.phase === 'open' ? `${qr()}<p>Scan to join · ${game.code}</p>` : ''}</section></aside></div>
-    ${reveal ? `<section class="panel reveal"><div class="kicker">AGENT ${game.revealIndex + 1} OF ${game.reveal.length}</div><h2>${escape(reveal.name)}’s missions</h2><ul>${reveal.missions.map(mission => `<li><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span><small>${mission.state === 'active' ? 'In progress at cutoff' : mission.state}</small></li>`).join('')}</ul></section>` : ''}`;
+  const reports = game.events.slice(-8).reverse();
+  return `<section class="command-banner">
+    <div class="command-radar" aria-hidden="true"></div>
+    <div class="command-heading">
+      <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
+      <h1>Operation <em>Gobble</em></h1>
+      <p>${live ? 'Mission control' : 'Mission debrief'}</p>
+    </div>
+    <div class="command-controls">
+      <div class="kicker">${live ? 'TIME TO EXTRACTION' : 'OPERATION STATUS'}</div>
+      <strong ${live ? 'data-clock' : ''}>${live ? countdown() : 'COMPLETE'}</strong>
+      <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button>
+    </div>
+  </section>
+  <div class="command-layout">
+    <section class="command-panel command-feed">
+      ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
+        <h2>${escape(reveal.name)}’s missions</h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
+        `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
+        <div class="tv-alert" role="status">${alertEvent ? `<div class="kicker">${icon('check')} MISSION COMPLETE</div><strong>${escape(alertEvent.name)}</strong><p>${escape(alertEvent.description || 'Completed a mission.')}</p><span>+${xp(alertEvent.points)} XP</span>` : ''}</div>
+        ${reports.length ? `<ul class="reports">${reports.map(report => `<li><span class="report-text"><strong>${escape(report.name)} <span class="report-title">/ ${escape(report.title || 'Mission complete')}</span></strong>${report.description ? `<span>${escape(report.description)}</span>` : ''}</span><small>+${xp(report.points)} XP</small></li>`).join('')}</ul>` : empty('Awaiting the first completed mission.')}`}
+    </section>
+    <aside class="command-sidebar">
+      <section class="command-panel"><div class="kicker">${icon('target')} AGENT RANKINGS</div><h2>${live ? 'Standings' : 'Final standings'}</h2>${standings()}</section>
+      ${live ? `<section class="command-panel join-panel">${qr()}<div class="kicker">SCAN TO JOIN<strong>${game.code}</strong></div></section>` : ''}
+    </aside>
+  </div>`;
 }
 
 function render() {
   app.classList.toggle('tv-view', page === 'tv');
+  document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
   app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : agent();
 }
 
@@ -175,18 +207,18 @@ function flash(message) {
 
 function chime(delay = 0) {
   if (!audio || audio.state !== 'running') return;
-  [540, 800, 1080].forEach((frequency, index) => {
+  [880, 1320].forEach((frequency, index) => {
     const start = audio.currentTime + delay + index * .065;
     const note = audio.createOscillator();
     const gain = audio.createGain();
-    note.type = 'triangle';
+    note.type = 'sine';
     note.frequency.value = frequency;
     gain.gain.setValueAtTime(0.001, start);
     gain.gain.exponentialRampToValueAtTime(0.19, start + .012);
-    gain.gain.exponentialRampToValueAtTime(0.001, start + .12);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + .16);
     note.connect(gain).connect(audio.destination);
     note.start(start);
-    note.stop(start + .13);
+    note.stop(start + .17);
   });
 }
 
@@ -209,7 +241,7 @@ async function refresh() {
           clearTimeout(alertTimer);
           alertTimer = setTimeout(() => {
             alertEvent = null;
-            document.querySelector('.tv-alert').textContent = '';
+            document.querySelector('.tv-alert')?.replaceChildren();
           }, 6500);
           if (sound) arrivals.forEach((_, index) => chime(index * .24));
         }
@@ -267,7 +299,21 @@ app.addEventListener('click', async event => {
   const button = event.target.closest('button[data-action],button[data-result]');
   if (!button || pending) return;
   const { action, result, id, step } = button.dataset;
-  if (result === 'abandoned' && !window.confirm('Abandon this mission for a 25 XP penalty?')) return;
+  if (result) {
+    const mission = (game?.player || demo).missions.find(item => item.assignmentId === id);
+    if (!mission || confirmation.open) return;
+    const [title, label] = resultLabels[result];
+    confirmation.querySelector('#confirm-title').textContent = title;
+    confirmation.querySelector('#confirm-action').textContent = label;
+    confirmation.querySelector('#confirm-description').textContent = result === 'completed'
+      ? `${mission.title} earns ${mission.points} XP${game ? ' and will appear on the TV scoreboard' : ''}.`
+      : `${mission.title} will be withdrawn. You’ll lose ${result === 'sniffed' ? penalty() : 25} XP.`;
+    confirmation.returnValue = '';
+    const closed = new Promise(resolve => confirmation.addEventListener('close', resolve, { once: true }));
+    confirmation.showModal();
+    await closed;
+    if (confirmation.returnValue !== 'confirm' || pending) return;
+  }
   pending = true;
   actionVersion++;
   button.disabled = true;
@@ -278,12 +324,12 @@ app.addEventListener('click', async event => {
       } else {
         const index = demo.missions.findIndex(item => item.assignmentId === id);
         if (index < 0) return;
-        demo.score += result === 'completed' ? demo.missions[index].points : -25;
+        demo.score += result === 'completed' ? demo.missions[index].points : result === 'sniffed' ? -penalty() : -25;
         if (result === 'completed') demo.completed++;
         demo.missions.splice(index, 1, { ...demoCards[demoNext % demoCards.length], assignmentId: 'demo-' + demoNext });
         demoNext++;
       }
-      flash(result === 'completed' ? 'Mission completed.' : 'Mission abandoned. −25 XP');
+      flash(resultMessages[result]());
     } else if (action === 'sound') {
       if (!sound) {
         audio ||= new AudioContext();

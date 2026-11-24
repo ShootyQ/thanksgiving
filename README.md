@@ -16,7 +16,7 @@ Open `http://localhost:3000` to try the demo. Use **Game leader** to create a li
 
 For guests on the same Wi-Fi, open the leader page using the computer's LAN address and port 3000 so the QR code points at an address their phones can reach. Set `GOBBLE_PUBLIC_ORIGIN` to the full guest-facing URL if the server needs to override the QR address.
 
-Scoring closes and missions are revealed automatically at cutoff. The leader can advance the featured dossier from the original browser profile. Each mission is used at most once per game, including completed and abandoned missions. If the deck runs low, players keep their remaining assignments and new players need three eligible missions to join.
+Scoring closes and missions are revealed automatically at cutoff. The leader can advance the featured dossier from the original browser profile. The TV announces each confirmed completion with the objective and XP earned. Players who are caught can mark an active mission **Sniffed out** for a 50 XP penalty and a new draw if the deck has cards left. Every draw is uniform among eligible, unused cards. A targeted mission names another randomly selected joined player. Each mission is used at most once per game, regardless of how it ends. If the deck runs low, players keep their remaining assignments and new players need three eligible missions to join.
 
 The local backend runs as one process and persists games to `.data/games.json`. Use `GOBBLE_DATA_DIR` for a different writable data directory and `PORT` for a different port. Keep the JSON file private and use a persistent local volume if hosting the Node backend remotely.
 

@@ -8,16 +8,31 @@ const missionById = new Map(missions.map(mission => [mission.id, mission]));
 const status = game => Date.now() >= game.cutoff ? 'revealed' : 'open';
 const active = player => player.assignments.filter(item => item.state === 'active');
 const publicPlayer = ({ id, name, score, completed }) => ({ id, name, score, completed });
-const details = assignment => ({ ...assignment, ...missionById.get(assignment.missionId) });
+const sniffedPenalty = 50;
 
-function deal(game, player, difficulty) {
-  const used = new Set(Object.values(game.players).flatMap(guest => guest.assignments.map(item => item.missionId)));
-  const available = missions.filter(mission => !used.has(mission.id) && (!player.family || mission.family));
-  const preferred = available.filter(mission => mission.difficulty === difficulty);
-  const pool = preferred.length ? preferred : available;
-  if (pool.length) {
-    player.assignments.push({ assignmentId: randomUUID(), missionId: pool[randomInt(pool.length)].id, state: 'active' });
+function details(assignment) {
+  const mission = missionById.get(assignment.missionId);
+  const description = assignment.targetName
+    ? mission.description.replace('{target}', () => assignment.targetName)
+    : mission.description;
+  return { ...assignment, ...mission, description };
+}
+
+function deal(game, player) {
+  const guests = Object.values(game.players);
+  const targets = guests.filter(guest => guest.id !== player.id);
+  const used = new Set(guests.flatMap(guest => guest.assignments.map(item => item.missionId)));
+  const pool = missions.filter(mission =>
+    !used.has(mission.id) && (!player.family || mission.family) && (!mission.targeted || targets.length)
+  );
+  if (!pool.length) return;
+  const mission = pool[randomInt(pool.length)];
+  const assignment = { assignmentId: randomUUID(), missionId: mission.id, state: 'active' };
+  if (mission.targeted) {
+    const target = targets[randomInt(targets.length)];
+    assignment.targetName = `Agent ${target.name} (#${String(target.id).padStart(3, '0')})`;
   }
+  player.assignments.push(assignment);
 }
 
 function view(game, auth) {
@@ -27,7 +42,7 @@ function view(game, auth) {
   const standings = Object.values(game.players).map(publicPlayer)
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
-    code: game.code, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
+    code: game.code, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
     revealIndex: game.revealIndex,
     player: player ? { ...publicPlayer(player), missions: active(player).map(details) } : null,
     reveal: phase === 'revealed' ? standings.map(row => ({
@@ -139,7 +154,7 @@ function updateGame(game, action, auth, input) {
     const id = Object.keys(game.players).length + 1;
     const player = { id, name, token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
     game.players[id] = player;
-    for (const difficulty of ['Easy', 'Medium', player.family ? 'Easy' : 'Hard']) deal(game, player, difficulty);
+    for (let slot = 0; slot < 3; slot++) deal(game, player);
     if (active(player).length < 3) {
       delete game.players[id];
       fail(409, 'There are fewer than three available missions for this selection.');
@@ -152,20 +167,26 @@ function updateGame(game, action, auth, input) {
     const assignment = active(player).find(item => item.assignmentId === input.assignmentId);
     if (!assignment) fail(409, 'That mission has already been updated.');
     if (status(game) !== 'open') fail(409, 'Scoring is closed.');
-    const mission = missionById.get(assignment.missionId);
+    const mission = details(assignment);
     if (input.result === 'completed') {
       assignment.state = 'completed';
       player.score += mission.points;
       player.completed++;
-      game.events.push({ sequence: ++game.sequence, name: player.name, points: mission.points });
+      game.events.push({
+        sequence: ++game.sequence, name: player.name, points: mission.points,
+        title: mission.title, description: mission.description,
+      });
       if (game.events.length > 30) game.events.shift();
+    } else if (input.result === 'sniffed') {
+      assignment.state = 'sniffed';
+      player.score -= sniffedPenalty;
     } else if (input.result === 'abandoned') {
       assignment.state = 'abandoned';
       player.score -= 25;
     } else {
       fail(400, 'Invalid mission result.');
     }
-    deal(game, player, mission.difficulty);
+    deal(game, player);
   } else if (action === 'advance') {
     if (auth !== game.host) fail(403, 'Only the game leader can advance the reveal.');
     if (status(game) !== 'revealed') fail(409, 'The reveal opens at cutoff.');

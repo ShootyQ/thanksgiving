@@ -1,3 +1,5 @@
+import { expansion } from './mission-expansion.js';
+
 const featured = [
   ['Operation Platypus', 'Get another guest to say “platypus” without directly asking them to.', 100, true],
   ['Operation Musical Chairs', 'Convince two guests to exchange seats without revealing your mission.', 250, true],
@@ -33,7 +35,7 @@ const prompts = [
 
 export const missions = [...featured, ...prompts.flatMap(([name, template, points, details]) =>
   details.map((detail, index) => [`${name} ${index + 1}`, template.replace('{detail}', detail), points, points <= 300])
-)].map(([title, description, points, family], index) => ({
-  id: index + 1, title, description, points, family,
+), ...expansion].map(([title, description, points, family], index) => ({
+  id: index + 1, title, description, points, family, targeted: description.includes('{target}'),
   difficulty: points < 200 ? 'Easy' : points < 400 ? 'Medium' : 'Hard',
 }));

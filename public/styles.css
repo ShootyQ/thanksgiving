@@ -12,7 +12,7 @@
   background: #f3efe4;
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 300px; }
+body { margin: 0; min-width: 300px; min-height: 100vh; }
 a { color: inherit; }
 button, input { font: inherit; }
 button { cursor: pointer; }
@@ -117,4 +117,105 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
   .dashboard { grid-template-columns: 1fr; gap: 12px; }
   aside { grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); }
   .tv-header { align-items: start; }
+}
+
+#mission-confirm {
+  width: min(92vw, 430px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 24px;
+}
+#mission-confirm::backdrop { background: #111910a8; }
+#mission-confirm p { color: var(--muted); }
+#mission-confirm .mission-actions { justify-content: flex-end; }
+.blown-button { color: #8a422e; }
+
+.command-mode {
+  color-scheme: dark;
+  --command-bg: #0d1512;
+  --command-surface: #17231e;
+  --command-line: #3b5044;
+  --command-light: #f6efd7;
+  --command-muted: #b6c6b8;
+  --command-amber: #ffb978;
+  --command-green: #b6ebac;
+  background: var(--command-bg);
+  color: var(--command-light);
+}
+.command-mode .topbar { background: #111c17; border-bottom: 1px solid var(--command-line); }
+.command-mode footer { color: var(--command-muted); border-color: var(--command-line); }
+.command-mode main { max-width: 1460px; padding-top: 25px; }
+.command-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  min-height: 245px;
+  padding: clamp(22px, 4vw, 54px);
+  border: 1px solid #536754;
+  border-radius: 4px;
+  background-color: #1a2b21;
+  background-image: linear-gradient(90deg, #16251d 14%, #16251d00), repeating-linear-gradient(0deg, #c7efbd0d 0 1px, transparent 1px 21px), repeating-linear-gradient(90deg, #c7efbd0d 0 1px, transparent 1px 21px);
+}
+.command-radar {
+  position: absolute;
+  z-index: -1;
+  width: clamp(230px, 48vw, 560px);
+  aspect-ratio: 1;
+  right: 14%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  opacity: .62;
+  background:
+    radial-gradient(circle at 50% 50%, #b8e6a5 0 2px, transparent 4px),
+    radial-gradient(circle at 63% 36%, #b8e6a5 0 2px, transparent 6px),
+    radial-gradient(circle at 37% 61%, #b8e6a5 0 2px, transparent 5px),
+    repeating-radial-gradient(circle, transparent 0 13%, #b8e6a555 13.2% 13.5%, transparent 14% 18%),
+    conic-gradient(from 302deg, #b8e6a55e, transparent 55deg 360deg);
+}
+.signal { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--command-green); font: 700 clamp(.68rem, 1.2vw, .9rem) var(--mono); letter-spacing: .13em; }
+.signal i { width: 8px; height: 8px; border-radius: 50%; background: var(--command-green); box-shadow: 0 0 12px #b6ebaca0; }
+.signal-code { color: var(--command-muted); }
+.command-heading h1 { font-size: clamp(2.65rem, 7vw, 7.25rem); margin: 14px 0 10px; }
+.command-heading em { color: var(--command-amber); font-weight: inherit; }
+.command-heading p { color: var(--command-muted); font: 700 clamp(.78rem, 1.4vw, 1.05rem) var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.command-controls { flex-shrink: 0; border: 1px solid var(--command-line); background: #101c16eb; padding: 15px; display: grid; gap: 10px; justify-items: start; }
+.command-controls strong { font: 700 clamp(1.15rem, 3vw, 2.6rem) var(--mono); letter-spacing: -.06em; color: var(--command-green); }
+.command-controls .kicker { color: var(--command-muted); }
+.command-mode .secondary { background: #26382d; border-color: #536754; color: var(--command-light); }
+.command-mode .secondary:hover { background: #354b3d; }
+.command-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(245px, 1fr); gap: 18px; align-items: start; margin-top: 18px; }
+.command-panel { min-width: 0; padding: clamp(16px, 2.3vw, 30px); border: 1px solid var(--command-line); border-radius: 4px; background: var(--command-surface); }
+.command-panel .kicker { color: var(--command-green); margin-bottom: 8px; }
+.command-panel h2 { font-size: clamp(1.75rem, 3.2vw, 3rem); }
+.command-panel .empty { color: var(--command-muted); }
+.command-panel .standings li { border-color: var(--command-line); }
+.command-panel .rank { color: var(--command-muted); }
+.command-panel .standings li:first-child, .command-panel .standing-points { color: var(--command-amber); }
+.command-sidebar { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.command-mode .join-panel { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.command-mode .join-panel .qr { width: clamp(90px, 10vw, 138px); height: auto; margin: 0; }
+.join-panel strong { display: block; color: var(--command-light); font: 700 clamp(1.1rem, 2vw, 1.7rem) var(--mono); margin-top: 6px; }
+.reports { list-style: none; padding: 0; margin: 16px 0 0; }
+.reports li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px 0; border-top: 1px solid var(--command-line); overflow-wrap: anywhere; }
+.report-text { display: grid; gap: 5px; }
+.report-text strong { font-size: clamp(1rem, 1.6vw, 1.35rem); }
+.report-text > span, .report-title { color: var(--command-muted); }
+.report-title { font-size: .85em; font-weight: 500; }
+.reports small { color: var(--command-green); text-transform: uppercase; font: 700 .79rem var(--mono); }
+.command-mode .tv-alert:not(:empty) { position: relative; padding: 16px 24px; background: #2c3021; border: 1px solid #8d7049; border-left: 5px solid var(--command-amber); border-radius: 2px; overflow-wrap: anywhere; }
+.command-mode .tv-alert .kicker { color: var(--command-amber); }
+.command-mode .tv-alert strong { font: 700 clamp(1.7rem, 4vw, 3.4rem)/1 Georgia, serif; }
+.command-mode .tv-alert p { margin: 6px 0; color: var(--command-light); }
+@media (max-width: 710px) {
+  .command-layout { grid-template-columns: minmax(0, 1fr); }
+  .command-banner { flex-wrap: wrap; }
+  .command-controls { grid-template-columns: auto auto; align-items: center; }
+  .command-controls .kicker { grid-column: 1 / -1; }
 }

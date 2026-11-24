@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#222923">
   <title>Operation Gobble</title>
-  <link rel="stylesheet" href="./styles.css">
-  <script type="module" src="./app.js?v=2"></script>
+  <link rel="stylesheet" href="./styles.css?v=3">
+  <script type="module" src="./app.js?v=3"></script>
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +14,16 @@
     <nav aria-label="Game views" id="navigation"></nav>
   </header>
   <main id="app"></main>
+  <dialog id="mission-confirm" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-description"></p>
+      <div class="mission-actions">
+        <button class="secondary" value="cancel" autofocus>Cancel</button>
+        <button class="primary" value="confirm" id="confirm-action"></button>
+      </div>
+    </form>
+  </dialog>
   <p id="notice" role="status" hidden></p>
   <footer><span>OPERATION GOBBLE</span><span>Keep your cover. Pass the pie.</span></footer>
 </body>
