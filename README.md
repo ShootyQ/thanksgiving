@@ -22,7 +22,7 @@ The local backend runs as one process and persists games to `.data/games.json`. 
 
 ## GitHub Pages and Firebase
 
-Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. The Pages workflow publishes `public/` and reads the public HTTPS function URL from the repository Actions variable `GOBBLE_API_URL`. With the variable empty, the Pages site serves the interactive demo.
+Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. The Pages workflow publishes `public/` and defaults to the `gobble` function in Firebase project `savemhq` (region `us-central1`). Set the repository Actions variable `GOBBLE_API_URL` if Firebase reports a different HTTPS endpoint.
 
 For live play, use a Firebase project with a default Firestore database and Blaze billing for Cloud Functions. The API uses Firestore through the function's service account. Review the existing Firestore rules to ensure no browser clients can read or write `gobbleGames`, including through broader wildcard rules. Keep the rest of the project's rules intact. Deploy only this function using an authorized Firebase CLI session:
 
@@ -30,4 +30,4 @@ For live play, use a Firebase project with a default Firestore database and Blaz
 firebase deploy --only functions:gobble --project YOUR_PROJECT_ID
 ```
 
-Set `GOBBLE_API_URL` to the deployed function URL, ending in `/gobble`, and rerun the Pages workflow. No Firebase web app config or service-account key is needed by the browser. Rehearse on the published site using the game leader, two guest browser profiles, and a TV tab before sharing the QR code.
+If Firebase reports a different URL, set `GOBBLE_API_URL` to the deployed function’s base URL and rerun the Pages workflow. No Firebase web app config or service-account key is needed by the browser. Rehearse on the published site using the game leader, two guest browser profiles, and a TV tab before sharing the QR code.
