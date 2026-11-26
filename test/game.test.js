@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,11 +18,14 @@ test('mission deck has 451 unique assignments and a family selection', () => {
   assert.equal(missions.filter(mission => mission.targeted).length, 40);
 });
 
-test('avatar catalog offers 30 distinct badges', () => {
+test('avatar catalog offers 30 distinct badges with WebP artwork', async () => {
   assert.equal(avatars.length, 30);
-  for (const key of ['id', 'name', 'path']) {
+  for (const key of ['id', 'name']) {
     assert.equal(new Set(avatars.map(avatar => avatar[key])).size, avatars.length);
   }
+  const images = await Promise.all(avatars.map(({ id }) => readFile(new URL(`../public/art/${id}.webp`, import.meta.url))));
+  for (const image of images) assert.equal(image.toString('ascii', 8, 12), 'WEBP');
+  assert.equal(new Set(images.map(image => image.toString('base64'))).size, avatars.length);
 });
 
 test('host, guests, and TV share scores while missions stay private until reveal', { timeout: 15000 }, async t => {

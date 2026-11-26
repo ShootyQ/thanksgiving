@@ -125,6 +125,9 @@ const assets = {
   '/avatars.js': ['avatars.js', 'text/javascript; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
+  ...Object.fromEntries(['gobble-briefing', ...avatars.map(avatar => avatar.id)].map(name => [
+    '/art/' + name + '.webp', ['art/' + name + '.webp', 'image/webp'],
+  ])),
 };
 
 function send(response, code, data) {

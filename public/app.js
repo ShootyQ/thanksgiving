@@ -20,7 +20,7 @@ const nav = document.querySelector('#navigation');
 const notice = document.querySelector('#notice');
 const query = new URLSearchParams(location.search);
 const code = (query.get('join') || query.get('game') || '').toUpperCase();
-const page = query.get('join') ? 'agent' : query.get('view') || 'agent';
+const page = query.get('join') ? 'agent' : query.get('view') || (code ? 'agent' : 'home');
 const hostToken = code && localStorage.getItem('gobble-host-' + code);
 let playerToken = code && localStorage.getItem('gobble-agent-' + code);
 let game;
@@ -71,6 +71,34 @@ const phaseLabel = () => ({ lobby: canJoin(game) ? 'Lobby open' : 'Lobby closed'
 const header = (eyebrow, title, description) => `<div class="page-heading"><div class="kicker">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div>`;
 const empty = message => `<p class="empty">${message}</p>`;
 
+function home() {
+  const previousGame = localStorage.getItem('gobble-last-host');
+  return `<section class="landing-hero" aria-labelledby="landing-title">
+    <img class="landing-art" src="./art/gobble-briefing.webp" alt="" fetchpriority="high" width="1536" height="1024">
+    <div class="landing-content">
+      <div class="landing-kicker">${icon('lock')} Thanksgiving’s undercover party game</div>
+      <h1 id="landing-title">Operation <em>Gobble<span>.</span></em></h1>
+      <p>Slip into an alias, pull off secret missions, and see who can fool the Thanksgiving table.</p>
+      <form id="code-form" class="landing-join">
+        <label for="landing-code">Game code</label>
+        <div class="landing-actions">
+          <input id="landing-code" name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="ABC123" spellcheck="false" autocapitalize="characters">
+          <button class="primary" type="submit">Join the game ${icon('arrow')}</button>
+        </div>
+      </form>
+      <div class="landing-links"><a href="${gameLink('host', previousGame || '')}">${previousGame ? 'Open game leader' : 'Host a game'}</a><a href="${gameLink('agent')}">Try a demo ${icon('arrow')}</a></div>
+    </div>
+  </section>
+  <section class="landing-brief" aria-labelledby="brief-title">
+    <div><div class="landing-kicker">FIELD BRIEFING</div><h2 id="brief-title">How to play</h2></div>
+    <div class="brief-cards">
+      <article>${icon('shield')}<h3>Pick your cover</h3><p>Choose a codename and an avatar. Keep your real identity under wraps.</p></article>
+      <article>${icon('folder')}<h3>Complete your missions</h3><p>Your first three assignments are ready as soon as you join.</p></article>
+      <article>${icon('tv')}<h3>Watch the TV</h3><p>See the standings and completed missions, then find out who pulled off what at cutoff.</p></article>
+    </div>
+  </section>`;
+}
+
 function missionCard(mission, index, enabled) {
   return `<article class="mission ${mission.difficulty.toLowerCase()}">
     <div class="mission-meta"><span class="difficulty"><i></i>${mission.difficulty}</span><span>MISSION ${String(index + 1).padStart(2, '0')}</span><span class="points">+${mission.points} XP</span></div>
@@ -88,7 +116,7 @@ const qr = () => `<img class="qr" src="${apiBase}/api/games/${game.code}/qr?targ
 
 const avatarsById = new Map(avatars.map(avatar => [avatar.id, avatar]));
 const claimedAvatars = () => new Set(game.standings.map(player => player.avatar).filter(avatar => avatarsById.has(avatar)));
-const avatarBadge = avatar => avatar ? `<span class="avatar-badge avatar-color-${avatar.color}" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round" stroke-linecap="round"><path d="${avatar.path}"/></svg></span>` : '';
+const avatarBadge = avatar => avatar ? `<span class="avatar-badge" aria-hidden="true"><img src="./art/${avatar.id}.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></span>` : '';
 
 function avatarPicker() {
   return `<fieldset class="avatar-picker">
@@ -319,10 +347,11 @@ function tv() {
 
 function render() {
   app.classList.toggle('tv-view', page === 'tv');
+  document.body.classList.toggle('landing-mode', page === 'home');
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
   const previousCodeword = document.querySelector('#received-codeword');
   const focusedCodeword = previousCodeword && document.activeElement === previousCodeword;
-  app.innerHTML = page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
+  app.innerHTML = page === 'home' ? home() : page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
   updateAvatarPicker();
   const codeword = document.querySelector('#received-codeword');
   if (previousCodeword && codeword) {
