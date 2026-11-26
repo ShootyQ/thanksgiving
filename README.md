@@ -41,3 +41,5 @@ firebase deploy --only functions:gobble --project YOUR_PROJECT_ID
 ```
 
 If Firebase reports a different URL, set `GOBBLE_API_URL` to the deployed function’s base URL and rerun the Pages workflow. No Firebase web app config or service-account key is needed by the browser. Rehearse on the published site using the game leader, two guest browser profiles, and a TV tab before sharing the QR code.
+
+TV completion sound by [klankbeeld on Freesound](https://freesound.org/people/klankbeeld/sounds/608325/).

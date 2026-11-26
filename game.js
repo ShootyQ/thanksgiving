@@ -128,6 +128,7 @@ const assets = {
   '/config.js': ['config.js', 'text/javascript; charset=utf-8'],
   '/avatars.js': ['avatars.js', 'text/javascript; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/audio/turkey-gobble.wav': ['audio/turkey-gobble.wav', 'audio/wav'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
   ...Object.fromEntries(['gobble-briefing', ...avatars.map(avatar => avatar.id)].map(name => [
     '/art/' + name + '.webp', ['art/' + name + '.webp', 'image/webp'],

@@ -26,6 +26,8 @@ let playerToken = code && localStorage.getItem('gobble-agent-' + code);
 let game;
 let audio;
 let sound = false;
+let queuedGobbles = 0;
+let gobblePlaying = false;
 let lastSequence = null;
 let alertEvent;
 let alertTimer;
@@ -436,21 +438,36 @@ function flash(message) {
   noticeTimer = setTimeout(() => { notice.hidden = true; }, 3500);
 }
 
-function chime(delay = 0) {
-  if (!audio || audio.state !== 'running') return;
-  [880, 1320].forEach((frequency, index) => {
-    const start = audio.currentTime + delay + index * .065;
-    const note = audio.createOscillator();
-    const gain = audio.createGain();
-    note.type = 'sine';
-    note.frequency.value = frequency;
-    gain.gain.setValueAtTime(0.001, start);
-    gain.gain.exponentialRampToValueAtTime(0.19, start + .012);
-    gain.gain.exponentialRampToValueAtTime(0.001, start + .16);
-    note.connect(gain).connect(audio.destination);
-    note.start(start);
-    note.stop(start + .17);
-  });
+function stopGobbles() {
+  sound = false;
+  queuedGobbles = 0;
+  gobblePlaying = false;
+  audio.pause();
+  audio.currentTime = 0;
+}
+
+async function playGobble() {
+  gobblePlaying = true;
+  try {
+    audio.currentTime = 0;
+    await audio.play();
+  } catch (error) {
+    gobblePlaying = false;
+    throw error;
+  }
+}
+
+async function playNextGobble() {
+  if (!sound || gobblePlaying || queuedGobbles === 0) return;
+  queuedGobbles--;
+  try {
+    await playGobble();
+  } catch {
+    if (!sound) return;
+    stopGobbles();
+    flash('Sound could not play. Try enabling it again.');
+    render();
+  }
 }
 
 async function refresh() {
@@ -478,7 +495,10 @@ async function refresh() {
             alertEvent = null;
             document.querySelector('.tv-alert')?.replaceChildren();
           }, 6500);
-          if (sound) arrivals.forEach((_, index) => chime(index * .24));
+          if (sound) {
+            queuedGobbles += arrivals.length;
+            void playNextGobble();
+          }
         }
       }
       lastSequence = latest;
@@ -608,13 +628,17 @@ app.addEventListener('click', async event => {
       flash(resultMessages[result]());
     } else if (action === 'sound') {
       if (!sound) {
-        audio ||= new AudioContext();
-        await audio.resume();
+        if (!audio) {
+          audio = new Audio(new URL('./audio/turkey-gobble.wav', import.meta.url));
+          audio.addEventListener('ended', () => {
+            gobblePlaying = false;
+            void playNextGobble();
+          });
+        }
+        await playGobble();
         sound = true;
-        chime();
       } else {
-        sound = false;
-        await audio.suspend();
+        stopGobbles();
       }
     } else if (action === 'copy') {
       await navigator.clipboard.writeText(new URL(joinLink(), location.href).href);
