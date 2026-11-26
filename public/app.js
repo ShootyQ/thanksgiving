@@ -66,6 +66,8 @@ let demoNext = 3;
 const demo = { id: 19, score: 0, completed: 0, missions: demoCards.slice(0, 3) };
 const agentLabel = id => 'AGENT ' + String(id).padStart(3, '0');
 const xp = value => new Intl.NumberFormat().format(value);
+const lobbySealed = state => state?.lobbySealed ?? state?.phase === 'lobby';
+const playerCount = () => game.playerCount ?? game.standings.length;
 const canJoin = state => state?.joinOpen ?? state?.phase === 'open';
 const phaseLabel = () => ({ lobby: canJoin(game) ? 'Lobby open' : 'Lobby closed', open: 'In progress', closed: 'Scoring closed', canceled: 'Game canceled', revealed: 'Declassified' })[game?.phase] || 'Demo mode';
 const header = (eyebrow, title, description) => `<div class="page-heading"><div class="kicker">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div>`;
@@ -115,7 +117,7 @@ function countdown() {
 const qr = () => `<img class="qr" src="${apiBase}/api/games/${game.code}/qr?target=${encodeURIComponent(new URL(joinLink(), location.href).href)}" alt="Scan to join Operation Gobble" width="116" height="116">`;
 
 const avatarsById = new Map(avatars.map(avatar => [avatar.id, avatar]));
-const claimedAvatars = () => new Set(game.standings.map(player => player.avatar).filter(avatar => avatarsById.has(avatar)));
+const claimedAvatars = () => new Set((game.claimedAvatars ?? game.standings.map(player => player.avatar)).filter(avatar => avatarsById.has(avatar)));
 const avatarBadge = avatar => avatar ? `<span class="avatar-badge" aria-hidden="true"><img src="./art/${avatar.id}.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></span>` : '';
 
 function avatarPicker() {
@@ -252,7 +254,7 @@ function host() {
         ${game.phase === 'lobby' ? `<section class="identity-host">
           <h3>Start the game</h3>
           <p>${canJoin(game)
-            ? `${game.standings.length} joined. Start when you’re ready (at least ${game.minimumAgents} agents). Starting unlocks new missions and sets the Identity Match roster. Guests can still join afterward.`
+            ? `${playerCount()} joined. Start when you’re ready (at least ${game.minimumAgents} agents). Starting unlocks new missions and sets the Identity Match roster. Guests can still join afterward.`
             : 'The cutoff has passed. Cancel this lobby and create a new game with a later cutoff.'}</p>
           ${canJoin(game) ? `<button class="primary" data-action="start" ${game.canStart ? '' : 'disabled'}>Start game</button>` : ''}
         </section>` : ''}
@@ -283,7 +285,7 @@ function host() {
         </section>
       </aside>
       <section class="panel control-roster">
-        <div class="control-section-title"><h2>Guest list</h2><span class="kicker">${game.standings.length} JOINED</span></div>${standings()}
+        <div class="control-section-title"><h2>Guest list</h2><span class="kicker">${playerCount()} JOINED</span></div>${standings()}
       </section>
     </div>`;
 }
@@ -331,6 +333,8 @@ function awards() {
 }
 
 function standings() {
+  if (lobbySealed(game)) return empty(game.phase === 'canceled'
+    ? 'The lobby ended with the roster sealed.' : 'Agent names and scores are hidden until the game starts.');
   if (!game.standings.length) return empty('Waiting for agents to join.');
   return `<ol class="standings">${game.standings.map((row, index) => `<li><span class="rank">${String(index + 1).padStart(2, '0')}</span><strong class="standing-agent">${avatarBadge(avatarsById.get(row.avatar))}<span>${escape(row.name)}</span></strong><span class="standing-points">${xp(row.score)} <small>XP</small></span></li>`).join('')}</ol>`;
 }
@@ -355,7 +359,8 @@ function tv() {
   const lobby = game.phase === 'lobby';
   const canceled = game.phase === 'canceled';
   const reveal = game.reveal?.[game.revealIndex];
-  const reports = game.events.slice(-8).reverse();
+  const sealed = lobbySealed(game);
+  const reports = sealed ? [] : game.events.slice(-8).reverse();
   return `<section class="command-banner" data-phase="${game.phase}">
     <img class="command-art" src="./art/gobble-briefing.webp" alt="" width="1536" height="1024" fetchpriority="high">
     <div class="command-heading">
@@ -376,12 +381,13 @@ function tv() {
     <section class="command-panel command-roster">
       <div class="command-section-title">
         <h2>${game.phase === 'revealed' ? 'Final standings' : lobby ? 'Agents in lobby' : 'Standings'}</h2>
-        <span class="kicker command-agent-count">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</span>
+        <span class="kicker command-agent-count">${icon('target')} ${playerCount()} ${playerCount() === 1 ? 'AGENT' : 'AGENTS'}</span>
       </div>${standings()}
     </section>
     <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
       ${game.phase === 'revealed' ? awards() : ''}
-      ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
+      ${sealed ? `<div class="kicker">${icon('lock')} CLASSIFIED</div><h2>Mission activity</h2>${empty(canceled ? 'Warm-up reports remain sealed.' : 'Warm-up reports appear once the game starts.')}` :
+      reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
         <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
         <div class="tv-alert" role="status">${alertEvent ? `<div class="kicker">${icon('check')} MISSION COMPLETE</div><strong>${escape(alertEvent.name)}</strong><p>${escape(alertEvent.description || 'Completed a mission.')}</p><span>+${xp(alertEvent.points)} XP</span>` : ''}</div>
@@ -463,7 +469,7 @@ async function refresh() {
         alertEvent = null;
       }
       const latest = next.events.at(-1)?.sequence || 0;
-      if (lastSequence !== null && next.phase !== 'canceled') {
+      if (lastSequence !== null && next.phase !== 'canceled' && !lobbySealed(next) && !lobbySealed(game)) {
         const arrivals = next.events.filter(item => item.sequence > lastSequence);
         if (arrivals.length) {
           alertEvent = arrivals.at(-1);

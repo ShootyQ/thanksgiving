@@ -65,9 +65,11 @@ function needsLobbyMissions(game, player) {
 
 function view(game, auth) {
   const host = !!auth && auth === game.host;
-  const player = Object.values(game.players).find(item => item.token === auth);
+  const players = Object.values(game.players);
+  const player = players.find(item => item.token === auth);
   const phase = status(game);
   const revealed = phase === 'revealed';
+  const lobbySealed = game.requiresStart === true && !game.startedAt;
   const joinOpen = joiningOpen(game, phase);
   const finalPlayer = guest => {
     const row = publicPlayer(guest);
@@ -75,13 +77,15 @@ function view(game, auth) {
     const identity = identityScore(game, guest);
     return { ...row, ...identity, score: row.score + identity.identityXp };
   };
-  const standings = Object.values(game.players).map(finalPlayer)
+  const standings = lobbySealed ? [] : players.map(finalPlayer)
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
-    code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
+    code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings,
+    events: lobbySealed ? [] : game.events.slice(-30), lobbySealed, playerCount: players.length,
+    ...(lobbySealed && joinOpen ? { claimedAvatars: players.map(guest => guest.avatar).filter(Boolean).sort() } : {}),
     revealIndex: game.revealIndex, joinOpen, manualStart: Boolean(game.requiresStart),
     canCancel: host && (phase === 'lobby' || phase === 'open'),
-    canStart: host && phase === 'lobby' && joinOpen && standings.length >= minimumAgents,
+    canStart: host && phase === 'lobby' && joinOpen && players.length >= minimumAgents,
     ...(phase === 'lobby' ? { minimumAgents } : {}),
     identity: identityView(game, phase === 'canceled' ? null : player, revealed),
     codewords: phase === 'lobby' ? null : codewordView(game, player),
