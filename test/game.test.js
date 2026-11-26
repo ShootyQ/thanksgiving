@@ -80,7 +80,16 @@ test('host, guests, and TV share scores while missions stay private until reveal
     gameRequest(path + '/join', null, { name: 'Maya', realName: 'Morgan W', family: true, avatar: 'turkey' }, 201),
     gameRequest(path + '/join', null, { name: 'Alex', realName: 'Avery C' }, 201),
   ]);
-  assert.equal(waitingMaya.player.missions.length, 0);
+  assert.equal(waitingMaya.player.missions.length, 3);
+  assert.equal(waitingAlex.player.missions.length, 3);
+  const warmup = waitingAlex.player.missions[0];
+  const warmedUp = await gameRequest(path + '/mission', waitingAlex.token, {
+    assignmentId: warmup.assignmentId, result: 'completed',
+  });
+  assert.equal(warmedUp.phase, 'lobby');
+  assert.equal(warmedUp.player.score, warmup.points);
+  assert.equal(warmedUp.player.completed, 1);
+  assert.deepEqual(warmedUp.player.missions, waitingAlex.player.missions.slice(1));
   assert.equal(waitingMaya.player.avatar, 'turkey');
   await gameRequest(path + '/start', waitingMaya.token, {}, 403);
   await gameRequest(path + '/codeword-mission', waitingMaya.token, {}, 409);
@@ -98,13 +107,20 @@ test('host, guests, and TV share scores while missions stay private until reveal
   await gameRequest(path + '/identity-open', host.token, {}, 409);
   const started = await gameRequest(path + '/start', host.token, {});
   assert.equal(started.phase, 'open');
-  assert.equal(started.joinOpen, false);
+  assert.equal(started.joinOpen, true);
   assert.equal(started.identity.opened, true);
-  await gameRequest(path + '/join', null, { name: 'Late Guest' }, 409);
+  const late = await gameRequest(path + '/join', null, { name: 'Late Guest', realName: 'Jules K' }, 201);
+  assert.equal(late.player.missions.length, 3);
+  assert.equal(late.identity.eligible, false);
+  assert.equal(late.identity.choices, undefined);
   await gameRequest(path + '/start', host.token, {}, 409);
   const maya = { ...(await gameRequest(path, waitingMaya.token)), token: waitingMaya.token };
   const alex = { ...(await gameRequest(path, waitingAlex.token)), token: waitingAlex.token };
-  assert.equal(maya.player.missions.length, 3);
+  assert.deepEqual(maya.player.missions, waitingMaya.player.missions);
+  assert.equal(alex.player.missions.length, 3);
+  assert.equal(alex.player.score, warmup.points);
+  assert.ok(alex.player.missions.every(mission => mission.id !== warmup.id));
+  assert.deepEqual(alex.player.missions.slice(0, 2), warmedUp.player.missions);
   const privateRound = (await gameRequest(path, maya.token)).identity;
   assert.deepEqual(privateRound.choices.map(choice => choice.name), ['Avery C', 'Blake R']);
   assert.ok(privateRound.choices.every(choice => Object.keys(choice).length === 2));
@@ -164,9 +180,11 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.equal(tv.reveal, null);
   assert.equal(tv.identity.choices, undefined);
   assert.ok(!JSON.stringify(tv).includes('Avery C'));
-  assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points, title: first.title, description: first.description }]);
-  assert.equal(tv.standings[0].name, 'Maya');
-  assert.equal((await fetch(origin + '/api/games' + path + '/qr')).status, 409);
+  assert.deepEqual(tv.events, [
+    { sequence: 1, name: 'Alex', points: warmup.points, title: warmup.title, description: warmup.description },
+    { sequence: 2, name: 'Maya', points: first.points, title: first.title, description: first.description },
+  ]);
+  assert.equal((await fetch(origin + '/api/games' + path + '/qr')).status, 200);
   await gameRequest(path + '/advance', host.token, { step: 1 }, 409);
   await stop();
   await start();

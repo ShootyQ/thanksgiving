@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#222923">
   <title>Operation Gobble</title>
-  <link rel="stylesheet" href="./styles.css?v=9">
-  <script type="module" src="./app.js?v=9"></script>
+  <link rel="stylesheet" href="./styles.css?v=10">
+  <script type="module" src="./app.js?v=10"></script>
 </head>
 <body>
   <header class="topbar">
@@ -21,6 +21,20 @@
       <div class="mission-actions">
         <button class="secondary" value="cancel" autofocus>Cancel</button>
         <button class="primary" value="confirm" id="confirm-action"></button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="join-tutorial" aria-labelledby="tutorial-title">
+    <form method="dialog">
+      <h2 id="tutorial-title">How to play</h2>
+      <ol>
+        <li><strong>Pick a mission.</strong> Open your dossier and choose one of your three secret tasks.</li>
+        <li><strong>Do it quietly.</strong> Keep the goal to yourself. When you finish, tap <b>Mark as completed</b> and confirm to earn points.</li>
+        <li><strong>Keep playing.</strong> Once the leader starts the game, completed missions are replaced with new ones.</li>
+      </ol>
+      <div class="mission-actions">
+        <button class="secondary" value="skip">Skip</button>
+        <button class="primary" value="done" autofocus>Got it</button>
       </div>
     </form>
   </dialog>

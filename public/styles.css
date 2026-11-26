@@ -119,7 +119,7 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
   .tv-header { align-items: start; }
 }
 
-#mission-confirm {
+#mission-confirm, #join-tutorial {
   width: min(92vw, 430px);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -127,9 +127,9 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
   color: var(--ink);
   padding: 24px;
 }
-#mission-confirm::backdrop { background: #111910a8; }
+#mission-confirm::backdrop, #join-tutorial::backdrop { background: #111910a8; }
 #mission-confirm p { color: var(--muted); }
-#mission-confirm .mission-actions { justify-content: flex-end; }
+#mission-confirm .mission-actions, #join-tutorial .mission-actions { justify-content: flex-end; }
 .blown-button { color: #8a422e; }
 
 .command-mode {
@@ -311,3 +311,6 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .cancel-game { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .danger { color: #842d2a; }
 .start-new-game { margin-top: 16px; text-decoration: none; }
+
+#join-tutorial ol { display: grid; gap: 9px; padding-left: 22px; margin: 4px 0; line-height: 1.45; }
+.tutorial-link { margin: 8px 10px 0 0; padding: 0; border: 0; background: transparent; color: #f0b783; font-weight: 700; text-decoration: underline; }

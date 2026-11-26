@@ -26,7 +26,7 @@ With at least three agents in the game, each player can claim one private codewo
 
 ## Identity round
 
-Guests choose a public codename and enter a real name privately. Guests join the lobby before missions are dealt. Once everyone is in (at least three guests), the leader selects **Start game**. That closes joining, deals missions, and opens identity matching if at least three players registered real names. Games created before the lobby was added still use **Open identity round**. Joined agents in that roster use **Identity match** to save guesses and revise them until cutoff. Each correct guess adds 600 XP to the final standings.
+Guests choose a public codename and enter a real name privately. Guests receive three missions when they join the lobby and can start scoring right away. Once at least three guests have joined, the leader can select **Start game**. That refills empty mission slots, enables replacements, and opens identity matching if at least three players registered real names. Guests can still join to play missions, and the identity roster stays fixed. Games created before the lobby was added still use **Open identity round**. Joined agents in that roster use **Identity match** to save guesses and revise them until cutoff. Each correct guess adds 600 XP to the final standings.
 
 At cutoff, the TV highlights the most missions completed and most agents identified. The matched real names are revealed only to the players in the identity round on their own devices.
 

@@ -35,7 +35,7 @@ function deal(game, player) {
   const pool = missions.filter(mission =>
     !used.has(mission.id) && (!player.family || mission.family) && (!mission.targeted || targets.length)
   );
-  if (!pool.length) return;
+  if (!pool.length) return false;
   const mission = pool[randomInt(pool.length)];
   const assignment = { assignmentId: randomUUID(), missionId: mission.id, state: 'active' };
   if (mission.targeted) {
@@ -43,17 +43,24 @@ function deal(game, player) {
     assignment.targetName = `Agent ${target.name} (#${String(target.id).padStart(3, '0')})`;
   }
   player.assignments.push(assignment);
+  return true;
 }
 
 const minimumAgents = 3;
 
-function joiningOpen(game, phase, now = Date.now()) {
-  return game.requiresStart ? phase === 'lobby' && now < game.cutoff : phase === 'open';
+function joiningOpen(game, phase) {
+  return phase === 'open' || (phase === 'lobby' && Date.now() < game.cutoff);
 }
 
-function dealInitialMissions(game, player) {
-  for (let slot = 0; slot < 3; slot++) deal(game, player);
-  if (active(player).length < 3) fail(409, 'There are fewer than three available missions for this selection.');
+function fillMissionSlots(game, player) {
+  const vacancies = 3 - active(player).length;
+  for (let slot = 0; slot < vacancies; slot++) {
+    if (!deal(game, player)) break;
+  }
+}
+
+function needsLobbyMissions(game, player) {
+  return player?.assignments.length === 0 && status(game) === 'lobby' && joiningOpen(game, 'lobby');
 }
 
 function view(game, auth) {
@@ -72,7 +79,7 @@ function view(game, auth) {
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
     code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
-    revealIndex: game.revealIndex, joinOpen,
+    revealIndex: game.revealIndex, joinOpen, manualStart: Boolean(game.requiresStart),
     canCancel: host && (phase === 'lobby' || phase === 'open'),
     canStart: host && phase === 'lobby' && joinOpen && standings.length >= minimumAgents,
     ...(phase === 'lobby' ? { minimumAgents } : {}),
@@ -153,9 +160,21 @@ export const gameHandler = store => async (request, response) => {
     const code = route[1].toUpperCase();
     const action = route[2];
     if (method === 'GET') {
-      const game = await store.read(code);
+      let game = await store.read(code);
       if (!game) missing();
-      if (!action) return send(response, 200, view(game, auth));
+      if (!action) {
+        const player = auth && Object.values(game.players).find(item => item.token === auth);
+        if (needsLobbyMissions(game, player)) {
+          // Lobbies created by the previous version had no assignments before start.
+          game = await store.update(code, current => {
+            if (!current) missing();
+            const guest = current.players[player.id];
+            if (needsLobbyMissions(current, guest)) fillMissionSlots(current, guest);
+            return current;
+          });
+        }
+        return send(response, 200, view(game, auth));
+      }
       if (action !== 'qr') fail(405, 'Method not allowed.');
       if (!joiningOpen(game, status(game))) fail(409, 'Joining is closed.');
       const origin = process.env.GOBBLE_PUBLIC_ORIGIN || url.searchParams.get('target') || `http://${request.headers.host}`;
@@ -203,15 +222,17 @@ function updateGame(game, action, auth, input) {
     }
     const player = { id, name, ...registerIdentity(game, input, fail), ...(avatar ? { avatar } : {}), token: token(), family: input.family === true, score: 0, completed: 0, assignments: [] };
     game.players[id] = player;
-    if (phase === 'open') dealInitialMissions(game, player);
+    fillMissionSlots(game, player);
+    if (active(player).length < 3) fail(409, 'There are fewer than three available missions for this selection.');
     return { status: 201, data: { token: player.token, ...view(game, player.token) } };
   }
   if (action === 'mission') {
     const player = Object.values(game.players).find(item => item.token === auth);
     if (!player) fail(403, 'Join this game to update missions.');
+    const phase = status(game);
+    if (!joiningOpen(game, phase)) fail(409, 'Scoring is closed.');
     const assignment = active(player).find(item => item.assignmentId === input.assignmentId);
     if (!assignment) fail(409, 'That mission has already been updated.');
-    if (status(game) !== 'open') fail(409, 'Scoring is closed.');
     const mission = details(assignment);
     if (input.result === 'completed') {
       assignment.state = 'completed';
@@ -229,7 +250,7 @@ function updateGame(game, action, auth, input) {
     } else {
       fail(400, 'Invalid mission result.');
     }
-    deal(game, player);
+    if (phase === 'open') deal(game, player);
   } else if (action === 'codeword-mission' || action === 'record-codeword') {
     const player = Object.values(game.players).find(item => item.token === auth);
     if (!player) fail(403, 'Join this game to use codewords.');
@@ -244,6 +265,7 @@ function updateGame(game, action, auth, input) {
   } else if (action === 'identity-open') {
     if (auth !== game.host) fail(403, 'Only the game leader can open the identity round.');
     if (status(game) !== 'open') fail(409, 'The game is closed.');
+    if (game.requiresStart) fail(409, 'The identity roster was set when the game started.');
     openIdentityRound(game, fail);
   } else if (action === 'guess') {
     const player = Object.values(game.players).find(item => item.token === auth);
@@ -257,7 +279,7 @@ function updateGame(game, action, auth, input) {
     if (now >= game.cutoff) fail(409, 'The cutoff has passed. Create a new game with a later cutoff.');
     const players = Object.values(game.players);
     if (players.length < minimumAgents) fail(409, `Wait for at least ${minimumAgents} agents to join.`);
-    for (const player of players) dealInitialMissions(game, player);
+    for (const player of players) fillMissionSlots(game, player);
     if (players.filter(player => player.identityId).length >= minimumAgents) openIdentityRound(game, fail);
     game.startedAt = now;
   } else if (action === 'cancel') {
