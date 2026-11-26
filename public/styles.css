@@ -374,3 +374,64 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 }
 
 .tv-entry .landing-content h1 { font-size: clamp(2.55rem, 6.25vw, 5.5rem); }
+
+.briefing-mode {
+  color-scheme: dark;
+  --ink: #f7efdb;
+  --muted: #d4d0bc;
+  --paper: #151d17;
+  --line: #3a4537;
+  --briefing-gold: #edac76;
+  color: var(--ink);
+  background: #0e1510;
+}
+.briefing-mode .topbar { background: #0e1510; border-bottom: 1px solid var(--line); }
+.briefing-mode main { padding-top: clamp(14px, 2.4vw, 28px); }
+.briefing-mode footer { color: var(--muted); border-color: var(--line); }
+.briefing-mode :is(a, button, input, select):focus-visible { outline-color: var(--briefing-gold); }
+.briefing-mode .landing-kicker, .briefing-mode .panel .kicker { color: var(--briefing-gold); }
+.control-banner { min-height: clamp(155px, 20vw, 242px); padding: clamp(18px, 3.2vw, 42px); }
+.control-banner .command-art { inset-inline: auto 0; width: 65%; object-position: center top; mask-image: linear-gradient(90deg, transparent, #000 36%); }
+.control-banner::after { background: linear-gradient(90deg, #151e16 18%, #151e16d9 39%, #151e1640 69%, transparent); }
+.control-heading { max-width: min(100%, 40rem); }
+.control-heading h1 { font-size: clamp(2.6rem, 6.4vw, 5.5rem); margin: 10px 0; }
+.control-heading h1 em { color: var(--briefing-gold); font-weight: inherit; }
+.control-heading p { max-width: 44ch; color: var(--muted); }
+.control-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(250px, 1fr);
+  grid-template-areas: "operations display" "roster display";
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+.control-operations { grid-area: operations; }
+.control-display { grid-area: display; min-width: 0; }
+.control-roster { grid-area: roster; }
+.control-section-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.control-operations .identity-host:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.control-invite { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.control-invite .qr { margin: 0; }
+.control-invite strong, .control-clock[data-clock] { display: block; font: 700 1.55rem var(--mono); color: var(--briefing-gold); margin: 5px 0; }
+.control-links { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.briefing-mode .standing-points { color: var(--briefing-gold); white-space: nowrap; }
+.briefing-mode .rank { color: var(--muted); }
+.briefing-mode .primary { color: #18150e; background: var(--briefing-gold); border-color: var(--briefing-gold); }
+.briefing-mode .primary:hover { background: #fac398; }
+.briefing-mode .secondary { color: var(--ink); background: #242d23; border-color: #536052; }
+.briefing-mode .secondary:hover { background: #334032; }
+.briefing-mode .danger { color: #f6b3a7; }
+.briefing-mode .inline-link { color: var(--briefing-gold); }
+.briefing-mode :is(input, .guess-controls select) { color: var(--ink); background: #101811; border-color: #65735f; }
+.briefing-mode .identity-matches { gap: 9px; }
+.briefing-mode .identity-matches .avatar-badge { width: 2.6rem; height: 2.6rem; }
+.briefing-mode .identity-matches .standing-agent small { color: var(--muted); }
+.briefing-mode .identity-matches h2 { margin-bottom: 4px; }
+.briefing-mode .guess-controls select { min-height: 42px; }
+.briefing-mode .identity-correct { color: #b6ebac; }
+@media (max-width: 700px) {
+  .briefing-mode nav { flex-wrap: wrap; }
+  .control-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "operations" "display" "roster"; }
+  .control-banner .command-art { width: 84%; object-position: 61% top; }
+  .control-banner::after { background: linear-gradient(90deg, #151e16 13%, #151e16dc 51%, #151e1659); }
+}

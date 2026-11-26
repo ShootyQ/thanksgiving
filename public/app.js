@@ -216,51 +216,80 @@ function agent() {
   </div>`;
 }
 
+function briefingHeader(label, title, description, symbol) {
+  return `<section class="command-banner control-banner">
+    <img class="command-art" src="./art/gobble-briefing.webp" alt="" width="1536" height="1024" fetchpriority="high">
+    <div class="control-heading">
+      <div class="landing-kicker">${icon(symbol)} ${label}</div>
+      <h1>${title}</h1>
+      <p>${description}</p>
+    </div>
+  </section>`;
+}
+
 function host() {
+  const heading = (description, title = 'Game <em>leader</em>') =>
+    briefingHeader('COMMAND CENTER', title, description, 'settings');
   if (!game) {
     const suggested = new Date(Date.now() + 3 * 3600000);
     const localTime = new Date(suggested - suggested.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    return `${header('COMMAND CENTER', 'Game leader', 'Set the mission cutoff and open the lobby for your guests.')}
+    return `${heading('Set the mission cutoff and open the lobby for your guests.')}
       <section class="panel form-panel"><form id="host-form">
         <label>Scoring cutoff<input type="datetime-local" name="cutoff" value="${localTime}" required></label>
         <button class="primary" type="submit">Create game ${icon('arrow')}</button></form>${openingError ? empty(escape(openingError)) : ''}</section>`;
   }
   if (game.phase === 'canceled' && game.host) {
-    return `${header('COMMAND CENTER', 'Game canceled', `Game ${game.code} is closed.`)}
+    return `${heading(`Game ${game.code} is closed.`, 'Game <em>canceled</em>')}
       <a class="primary start-new-game" href="${gameLink('host', '')}">Create a new game ${icon('arrow')}</a>`;
   }
-  if (!game.host) return `${header('COMMAND CENTER', 'Game leader', 'Open this game on the browser that created it to control the reveal.')}<a class="inline-link" href="${gameLink('host', '')}">Create a game</a>`;
-  return `${header('COMMAND CENTER', 'Game leader', `Game ${game.code} · ${phaseLabel()}`)}
-    <div class="dashboard"><section class="panel">
-    <h2>Guest list</h2>${standings()}
-    <div class="host-actions">${game.phase === 'closed' ? '<button class="primary" data-action="reveal">Open group reveal</button>' : ''}
-    ${game.phase === 'lobby' ? `<section class="identity-host">
-      <h3>Start the game</h3>
-      <p>${canJoin(game)
-        ? `${game.standings.length} joined. Start when you’re ready (at least ${game.minimumAgents} agents). Starting unlocks new missions and sets the Identity Match roster. Guests can still join afterward.`
-        : 'The cutoff has passed. Cancel this lobby and create a new game with a later cutoff.'}</p>
-      ${canJoin(game) ? `<button class="primary" data-action="start" ${game.canStart ? '' : 'disabled'}>Start game</button>` : ''}
-    </section>` : ''}
-    ${game.phase === 'open' ? '<p>The group reveal opens automatically at the scoring cutoff.</p>' : ''}
-    ${game.phase === 'open' && game.identity ? `<section class="identity-host">
-      <h3>Identity matching</h3>
-      ${game.identity.opened ? '<p>Guessing is open until cutoff.</p>' : game.manualStart
-        ? '<p>Identity Match requires three agents with real names at the start.</p>' : `<p>${game.identity.readyCount} ready. Open once everyone has joined. The guessing roster is set when the round opens.</p>
-        <button class="primary" data-action="identity-open" ${game.identity.readyCount < 3 ? 'disabled' : ''}>Open identity round</button>`}
-    </section>` : ''}
-    ${game.canCancel ? '<section class="cancel-game"><button class="secondary danger" data-action="cancel">Cancel game</button></section>' : ''}
-    ${game.phase === 'revealed' && game.reveal.length ? `<button class="secondary" data-action="advance" data-step="-1" ${game.revealIndex === 0 ? 'disabled' : ''}>Previous agent</button> <button class="primary" data-action="advance" data-step="1" ${game.revealIndex >= game.reveal.length - 1 ? 'disabled' : ''}>Next agent</button>` : ''}</div></section>
-    <aside><section class="panel briefing"><div class="kicker">${canJoin(game) ? 'RECRUIT AGENTS' : 'GAME DISPLAY'}</div>
-    ${canJoin(game) ? `${qr()}<h2>${game.code}</h2><button class="secondary" data-action="copy">Copy join link</button>` : ''}
-    ${canJoin(game) || playerToken ? `<a class="inline-link" href="${joinLink()}">${playerToken ? 'My dossier' : 'Join as a player'} ${icon('arrow')}</a>` : ''}
-    <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a></section>
-    <section class="panel briefing"><div class="kicker">${game.phase === 'lobby' ? 'SCHEDULED CUTOFF' : 'TIME REMAINING'}</div>
-    ${game.phase === 'open' ? `<h3 data-clock>${countdown()}</h3>` : ''}<p>Cutoff at ${new Date(game.cutoff).toLocaleString()}</p></section></aside></div>`;
+  if (!game.host) return `${heading('Open this game on the browser that created it to control the reveal.')}<a class="inline-link" href="${gameLink('host', '')}">Create a game ${icon('arrow')}</a>`;
+  return `${heading(`Game ${game.code} · ${phaseLabel()}`)}
+    <div class="control-layout">
+      <section class="panel control-operations">
+        <h2>Game controls</h2>
+        <div class="host-actions">${game.phase === 'closed' ? '<button class="primary" data-action="reveal">Open group reveal</button>' : ''}
+        ${game.phase === 'lobby' ? `<section class="identity-host">
+          <h3>Start the game</h3>
+          <p>${canJoin(game)
+            ? `${game.standings.length} joined. Start when you’re ready (at least ${game.minimumAgents} agents). Starting unlocks new missions and sets the Identity Match roster. Guests can still join afterward.`
+            : 'The cutoff has passed. Cancel this lobby and create a new game with a later cutoff.'}</p>
+          ${canJoin(game) ? `<button class="primary" data-action="start" ${game.canStart ? '' : 'disabled'}>Start game</button>` : ''}
+        </section>` : ''}
+        ${game.phase === 'open' ? '<p>The group reveal opens automatically at the scoring cutoff.</p>' : ''}
+        ${game.phase === 'open' && game.identity ? `<section class="identity-host">
+          <h3>Identity matching</h3>
+          ${game.identity.opened ? '<p>Guessing is open until cutoff.</p>' : game.manualStart
+            ? '<p>Identity Match requires three agents with real names at the start.</p>' : `<p>${game.identity.readyCount} ready. Open once everyone has joined. The guessing roster is set when the round opens.</p>
+            <button class="primary" data-action="identity-open" ${game.identity.readyCount < 3 ? 'disabled' : ''}>Open identity round</button>`}
+        </section>` : ''}
+        ${game.canCancel ? '<section class="cancel-game"><button class="secondary danger" data-action="cancel">Cancel game</button></section>' : ''}
+        ${game.phase === 'revealed' && game.reveal.length ? `<button class="secondary" data-action="advance" data-step="-1" ${game.revealIndex === 0 ? 'disabled' : ''}>Previous agent</button> <button class="primary" data-action="advance" data-step="1" ${game.revealIndex >= game.reveal.length - 1 ? 'disabled' : ''}>Next agent</button>` : ''}</div>
+      </section>
+      <aside class="control-display">
+        <section class="panel briefing">
+          <h2>${canJoin(game) ? 'Recruit agents' : 'Game display'}</h2>
+          ${canJoin(game) ? `<div class="control-invite">${qr()}<div><div class="kicker">GAME CODE</div><strong>${game.code}</strong></div></div>
+            <button class="secondary" data-action="copy">Copy join link</button>` : ''}
+          <div class="control-links">
+            ${canJoin(game) || playerToken ? `<a class="inline-link" href="${joinLink()}">${playerToken ? 'My dossier' : 'Join as a player'} ${icon('arrow')}</a>` : ''}
+            <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a>
+          </div>
+        </section>
+        <section class="panel briefing">
+          <div class="kicker">${game.phase === 'open' ? 'TIME REMAINING' : 'SCHEDULED CUTOFF'}</div>
+          ${game.phase === 'open' ? `<h3 class="control-clock" data-clock>${countdown()}</h3>` : ''}
+          <p>Cutoff at ${new Date(game.cutoff).toLocaleString()}</p>
+        </section>
+      </aside>
+      <section class="panel control-roster">
+        <div class="control-section-title"><h2>Guest list</h2><span class="kicker">${game.standings.length} JOINED</span></div>${standings()}
+      </section>
+    </div>`;
 }
 
 function matching() {
   const identity = game?.identity;
-  const heading = description => header('COUNTERINTELLIGENCE', 'Identity match', description);
+  const heading = description => briefingHeader('COUNTERINTELLIGENCE', 'Identity <em>match</em>', description, 'target');
   if (!game) return heading(escape(openingError || 'Open the Identity match page from your game.'));
   if (game.phase === 'canceled') return heading('The game was canceled.');
   if (game.phase === 'lobby') return heading('Identity Match opens when the game leader starts the game.');
@@ -278,7 +307,7 @@ function matching() {
       }).join('')}</ul>`;
   }
   return `${heading(`Match each codename to a real name for ${identity.points} XP per correct guess. You can change guesses until cutoff.`)}
-    <form id="guess-form" class="identity-matches">${identity.agentIds.map(id => {
+    <form id="guess-form" class="identity-matches"><h2>Agent dossiers</h2>${identity.agentIds.map(id => {
       const row = game.standings.find(entry => entry.id === id);
       const current = identity.guesses[id] || '';
       return `<div class="panel guess-row">
@@ -364,6 +393,7 @@ function render() {
   app.classList.toggle('tv-view', page === 'tv');
   document.body.classList.toggle('landing-mode', page === 'home' || (page === 'tv' && !game));
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
+  document.body.classList.toggle('briefing-mode', page === 'host' || page === 'identity');
   const previousCodeword = document.querySelector('#received-codeword');
   const focusedCodeword = previousCodeword && document.activeElement === previousCodeword;
   app.innerHTML = page === 'home' ? home() : page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
