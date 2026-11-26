@@ -306,15 +306,28 @@ function standings() {
 }
 
 function tv() {
-  if (!game) return `${header('LIVE FEED', 'TV scoreboard', escape(openingError || (code ? 'Contacting headquarters…' : 'Enter a game code to watch the live rankings.')))}
-    <form id="tv-form" class="panel form-panel"><label>Game code<input name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="A1B2C3" value="${escape(code)}"></label><button class="primary">Open scoreboard</button></form>`;
+  if (!game) return `<section class="landing-hero tv-entry">
+    <img class="landing-art" src="./art/gobble-briefing.webp" alt="" width="1536" height="1024">
+    <div class="landing-content">
+      <div class="landing-kicker">${icon('tv')} OPERATION GOBBLE</div>
+      <h1>TV scoreboard</h1>
+      <p>${escape(openingError || (code ? 'Contacting headquarters…' : 'Enter a game code to open the standings and live mission feed.'))}</p>
+      <form id="tv-form" class="landing-join">
+        <label for="tv-code">Game code</label>
+        <div class="landing-actions">
+          <input id="tv-code" name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="ABC123" value="${escape(code)}" spellcheck="false" autocapitalize="characters">
+          <button class="primary" type="submit">Open scoreboard ${icon('arrow')}</button>
+        </div>
+      </form>
+    </div>
+  </section>`;
   const live = game.phase === 'open';
   const lobby = game.phase === 'lobby';
   const canceled = game.phase === 'canceled';
   const reveal = game.reveal?.[game.revealIndex];
   const reports = game.events.slice(-8).reverse();
-  return `<section class="command-banner">
-    <div class="command-radar" aria-hidden="true"></div>
+  return `<section class="command-banner" data-phase="${game.phase}">
+    <img class="command-art" src="./art/gobble-briefing.webp" alt="" width="1536" height="1024" fetchpriority="high">
     <div class="command-heading">
       <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : lobby ? 'AGENT LOBBY' : canceled ? 'OPERATION CANCELED' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
       <h1>Operation <em>Gobble</em></h1>
@@ -331,8 +344,10 @@ function tv() {
   </section>
   <div class="command-layout">
     <section class="command-panel command-roster">
-      <div class="kicker">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</div>
-      <h2>${game.phase === 'revealed' ? 'Final standings' : lobby ? 'Agents in lobby' : 'Standings'}</h2>${standings()}
+      <div class="command-section-title">
+        <h2>${game.phase === 'revealed' ? 'Final standings' : lobby ? 'Agents in lobby' : 'Standings'}</h2>
+        <span class="kicker command-agent-count">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</span>
+      </div>${standings()}
     </section>
     <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
       ${game.phase === 'revealed' ? awards() : ''}
@@ -347,7 +362,7 @@ function tv() {
 
 function render() {
   app.classList.toggle('tv-view', page === 'tv');
-  document.body.classList.toggle('landing-mode', page === 'home');
+  document.body.classList.toggle('landing-mode', page === 'home' || (page === 'tv' && !game));
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
   const previousCodeword = document.querySelector('#received-codeword');
   const focusedCodeword = previousCodeword && document.activeElement === previousCodeword;
