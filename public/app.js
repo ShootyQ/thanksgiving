@@ -177,23 +177,24 @@ function codewordPanel() {
 }
 
 function agent() {
-  if (game?.phase === 'canceled') return header('OPERATION CANCELED', 'Game canceled', 'The game leader ended this game.');
+  if (game?.phase === 'canceled') return briefingHeader('OPERATION CANCELED', 'Game <em>canceled</em>', 'The game leader ended this game.', 'lock');
   if (code && !game?.player) {
-    if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
-    return `${header('SECURE ACCESS', 'Join the operation', `Game code ${game.code}`)}
+    const heading = (title, description) => briefingHeader('SECURE ACCESS', title, description, 'lock');
+    if (!game) return heading('Join a <em>game</em>', escape(openingError || 'Contacting headquarters…'));
+    return `${heading('Join the <em>operation</em>', `Game code ${game.code}`)}
       <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${canJoin(game) ? `<form id="join-form"><label>${game.identity ? 'Create your agent name' : 'Your name'}<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="${game.identity ? 'A codename others won’t guess' : 'Enter your name'}"></label>${game.identity ? `<label>Your real name<input name="realName" maxlength="40" autocomplete="name" required aria-describedby="real-name-help" placeholder="First name and last initial"></label><p class="identity-help" id="real-name-help">Your codename is public. Your real name appears in the guessing list without a codename. Only players in the identity round see the matches at cutoff.</p>` : ''}${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
   }
   const player = game?.player || demo;
   const lobby = game?.phase === 'lobby';
   const playing = !game || game.phase === 'open' || (lobby && canJoin(game));
-  return `<div class="dossier-banner">
-    <div><div class="kicker banner-label">${avatarBadge(avatarsById.get(player.avatar)) || icon('lock')} CLASSIFIED <span class="banner-dot"></span> ${agentLabel(player.id)}</div>
-    <h1>Agent dossier<span>.</span></h1><p>${lobby ? (playing ? 'You can score now. New missions arrive when the leader starts the game.' : 'The cutoff passed before the game started.') : 'Your missions are for your eyes only.'}</p>
+  return `<section class="command-banner control-banner dossier-banner">
+    <img class="command-art" src="./art/gobble-briefing.webp" alt="" width="1536" height="1024" fetchpriority="high">
+    <div class="control-heading"><div class="kicker banner-label">${avatarBadge(avatarsById.get(player.avatar)) || icon('lock')} CLASSIFIED <span class="banner-dot"></span> ${agentLabel(player.id)}</div>
+    <h1>Agent <em>dossier.</em></h1><p>${lobby ? (playing ? 'You can score now. New missions arrive when the leader starts the game.' : 'The cutoff passed before the game started.') : 'Your missions are for your eyes only.'}</p>
     ${game ? '<button type="button" class="tutorial-link" data-action="tutorial">How to play</button>' : ''}
     ${game?.codewords && playing ? '<a class="codeword-jump" href="#codeword-panel">Secret delivery ↓</a>' : ''}</div>
-    <div class="banner-mark" aria-hidden="true">${icon('target')}</div>
     <div class="status"><i></i>${phaseLabel()}</div>
-  </div>
+  </section>
   <div class="dashboard">
     <section class="mission-list" aria-label="Your missions">
       <div class="section-title"><div><div class="kicker">FIELD ASSIGNMENTS</div><h2>Active missions</h2></div><span class="counter">${player.missions.length} ACTIVE</span></div>
@@ -393,7 +394,7 @@ function render() {
   app.classList.toggle('tv-view', page === 'tv');
   document.body.classList.toggle('landing-mode', page === 'home' || (page === 'tv' && !game));
   document.body.classList.toggle('command-mode', page === 'tv' && Boolean(game));
-  document.body.classList.toggle('briefing-mode', page === 'host' || page === 'identity');
+  document.body.classList.toggle('briefing-mode', ['host', 'identity', 'agent'].includes(page));
   const previousCodeword = document.querySelector('#received-codeword');
   const focusedCodeword = previousCodeword && document.activeElement === previousCodeword;
   app.innerHTML = page === 'home' ? home() : page === 'host' ? host() : page === 'tv' ? tv() : page === 'identity' ? matching() : agent();
