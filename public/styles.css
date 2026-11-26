@@ -307,3 +307,7 @@ footer { max-width: 1152px; margin: 24px auto 0; border-top: 1px solid var(--lin
 .codeword-panel > button { margin-top: 10px; }
 .codeword-phrase { margin: 8px 0 5px; padding: 9px; border: 1px dashed #aca48d; border-radius: 5px; background: #f1ebd9; font: 700 1rem var(--mono); }
 #codeword-form { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); gap: 6px; }
+
+.cancel-game { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.danger { color: #842d2a; }
+.start-new-game { margin-top: 16px; text-decoration: none; }

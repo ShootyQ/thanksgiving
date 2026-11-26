@@ -66,7 +66,7 @@ let demoNext = 3;
 const demo = { id: 19, score: 0, completed: 0, missions: demoCards.slice(0, 3) };
 const agentLabel = id => 'AGENT ' + String(id).padStart(3, '0');
 const xp = value => new Intl.NumberFormat().format(value);
-const phaseLabel = () => ({ open: 'In progress', closed: 'Scoring closed', revealed: 'Declassified' })[game?.phase] || 'Demo mode';
+const phaseLabel = () => ({ open: 'In progress', closed: 'Scoring closed', canceled: 'Game canceled', revealed: 'Declassified' })[game?.phase] || 'Demo mode';
 const header = (eyebrow, title, description) => `<div class="page-heading"><div class="kicker">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div>`;
 const empty = message => `<p class="empty">${message}</p>`;
 
@@ -148,6 +148,7 @@ function codewordPanel() {
 }
 
 function agent() {
+  if (game?.phase === 'canceled') return header('OPERATION CANCELED', 'Game canceled', 'The game leader ended this game.');
   if (code && !game?.player) {
     if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
     return `${header('SECURE ACCESS', 'Join the operation', `Game code ${game.code}`)}
@@ -192,6 +193,10 @@ function host() {
         <label>Scoring cutoff<input type="datetime-local" name="cutoff" value="${localTime}" required></label>
         <button class="primary" type="submit">Create game ${icon('arrow')}</button></form>${openingError ? empty(escape(openingError)) : ''}</section>`;
   }
+  if (game.phase === 'canceled' && game.host) {
+    return `${header('COMMAND CENTER', 'Game canceled', `Game ${game.code} is closed.`)}
+      <a class="primary start-new-game" href="${gameLink('host', '')}">Create a new game ${icon('arrow')}</a>`;
+  }
   if (!game.host) return `${header('COMMAND CENTER', 'Game leader', 'Open this game on the browser that created it to control the reveal.')}<a class="inline-link" href="${gameLink('host', '')}">Create a game</a>`;
   return `${header('COMMAND CENTER', 'Game leader', `Game ${game.code} · ${phaseLabel()}`)}
     <div class="dashboard"><section class="panel">
@@ -203,6 +208,7 @@ function host() {
       ${game.identity.opened ? '<p>Guessing is open until cutoff.</p>' : `<p>${game.identity.readyCount} ready. Open once everyone has joined. The guessing roster is set when the round opens.</p>
         <button class="primary" data-action="identity-open" ${game.identity.readyCount < 3 ? 'disabled' : ''}>Open identity round</button>`}
     </section>` : ''}
+    ${game.canCancel ? '<section class="cancel-game"><button class="secondary danger" data-action="cancel">Cancel game</button></section>' : ''}
     ${game.phase === 'revealed' && game.reveal.length ? `<button class="secondary" data-action="advance" data-step="-1" ${game.revealIndex === 0 ? 'disabled' : ''}>Previous agent</button> <button class="primary" data-action="advance" data-step="1" ${game.revealIndex >= game.reveal.length - 1 ? 'disabled' : ''}>Next agent</button>` : ''}</div></section>
     <aside><section class="panel briefing"><div class="kicker">RECRUIT AGENTS</div>${qr()}<h2>${game.code}</h2>
     <button class="secondary" data-action="copy">Copy join link</button> <a class="inline-link" href="${joinLink()}">${playerToken ? 'My missions' : 'Join as a player'} ${icon('arrow')}</a> <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a></section>
@@ -213,6 +219,7 @@ function matching() {
   const identity = game?.identity;
   const heading = description => header('COUNTERINTELLIGENCE', 'Identity match', description);
   if (!game) return heading(escape(openingError || 'Open the Identity match page from your game.'));
+  if (game.phase === 'canceled') return heading('The game was canceled.');
   if (!identity) return heading('The game leader needs to deploy the latest Firebase function to enable identity matching.');
   if (!game.player) return `${heading('Join the game to make guesses.')}<a class="inline-link" href="${joinLink()}">Join game ${icon('arrow')}</a>`;
   if (!identity.opened) return heading(game.phase === 'revealed' ? 'The identity round did not open.' : 'Waiting for the game leader to open the round.');
@@ -257,19 +264,20 @@ function tv() {
   if (!game) return `${header('LIVE FEED', 'TV scoreboard', escape(openingError || (code ? 'Contacting headquarters…' : 'Enter a game code to watch the live rankings.')))}
     <form id="tv-form" class="panel form-panel"><label>Game code<input name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="A1B2C3" value="${escape(code)}"></label><button class="primary">Open scoreboard</button></form>`;
   const live = game.phase === 'open';
+  const canceled = game.phase === 'canceled';
   const reveal = game.reveal?.[game.revealIndex];
   const reports = game.events.slice(-8).reverse();
   return `<section class="command-banner">
     <div class="command-radar" aria-hidden="true"></div>
     <div class="command-heading">
-      <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
+      <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : canceled ? 'OPERATION CANCELED' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
       <h1>Operation <em>Gobble</em></h1>
-      <p>${live ? 'Mission control' : 'Mission debrief'}</p>
+      <p>${live ? 'Mission control' : canceled ? 'Game canceled' : 'Mission debrief'}</p>
     </div>
     <div class="command-tools">
       <div class="command-controls">
         <div class="kicker">${live ? 'TIME TO EXTRACTION' : 'OPERATION STATUS'}</div>
-        <strong ${live ? 'data-clock' : ''}>${live ? countdown() : 'COMPLETE'}</strong>
+        <strong ${live ? 'data-clock' : ''}>${live ? countdown() : canceled ? 'CANCELED' : 'COMPLETE'}</strong>
         <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button>
       </div>
       ${live ? `<div class="command-join">${qr()}<div class="kicker">SCAN TO JOIN</div></div>` : ''}
@@ -278,10 +286,10 @@ function tv() {
   <div class="command-layout">
     <section class="command-panel command-roster">
       <div class="kicker">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</div>
-      <h2>${live ? 'Standings' : 'Final standings'}</h2>${standings()}
+      <h2>${game.phase === 'revealed' ? 'Final standings' : 'Standings'}</h2>${standings()}
     </section>
     <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
-      ${!live ? awards() : ''}
+      ${game.phase === 'revealed' ? awards() : ''}
       ${reveal ? `<div class="kicker">DOSSIER ${game.revealIndex + 1} / ${game.reveal.length}</div>
         <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
@@ -357,8 +365,12 @@ async function refresh() {
     const next = await request('/' + code);
     if (pending || version !== actionVersion) return;
     if (page === 'tv') {
+      if (next.phase === 'canceled') {
+        clearTimeout(alertTimer);
+        alertEvent = null;
+      }
       const latest = next.events.at(-1)?.sequence || 0;
-      if (lastSequence !== null) {
+      if (lastSequence !== null && next.phase !== 'canceled') {
         const arrivals = next.events.filter(item => item.sequence > lastSequence);
         if (arrivals.length) {
           alertEvent = arrivals.at(-1);
@@ -440,6 +452,19 @@ app.addEventListener('change', event => {
   if (event.target.matches('#join-form input[name="avatar"]')) updateAvatarPicker();
 });
 
+async function confirmAction(title, label, description, cancelLabel = 'Cancel') {
+  if (confirmation.open) return false;
+  confirmation.querySelector('#confirm-title').textContent = title;
+  confirmation.querySelector('#confirm-action').textContent = label;
+  confirmation.querySelector('#confirm-description').textContent = description;
+  confirmation.querySelector('button[value="cancel"]').textContent = cancelLabel;
+  confirmation.returnValue = '';
+  const closed = new Promise(resolve => confirmation.addEventListener('close', resolve, { once: true }));
+  confirmation.showModal();
+  await closed;
+  return confirmation.returnValue === 'confirm';
+}
+
 app.addEventListener('click', async event => {
   const button = event.target.closest('button[data-action],button[data-result]');
   if (!button || pending) return;
@@ -448,16 +473,14 @@ app.addEventListener('click', async event => {
     const mission = (game?.player || demo).missions.find(item => item.assignmentId === id);
     if (!mission || confirmation.open) return;
     const [title, label] = resultLabels[result];
-    confirmation.querySelector('#confirm-title').textContent = title;
-    confirmation.querySelector('#confirm-action').textContent = label;
-    confirmation.querySelector('#confirm-description').textContent = result === 'completed'
+    const description = result === 'completed'
       ? `${mission.title} earns ${mission.points} XP${game ? ' and will appear on the TV scoreboard' : ''}.`
       : `${mission.title} will be withdrawn. You’ll lose ${result === 'sniffed' ? penalty() : 25} XP.`;
-    confirmation.returnValue = '';
-    const closed = new Promise(resolve => confirmation.addEventListener('close', resolve, { once: true }));
-    confirmation.showModal();
-    await closed;
-    if (confirmation.returnValue !== 'confirm' || pending) return;
+    if (!(await confirmAction(title, label, description)) || pending) return;
+  } else if (action === 'cancel') {
+    const confirmed = await confirmAction('Cancel this game?', 'Cancel game',
+      'Everyone will stop playing immediately. Scores stay on the TV, and the group reveal will be skipped.', 'Keep playing');
+    if (!confirmed || pending) return;
   }
   pending = true;
   actionVersion++;
@@ -491,6 +514,7 @@ app.addEventListener('click', async event => {
       return;
     } else {
       game = await request('/' + code + '/' + action, action === 'advance' ? { step: Number(step) } : {});
+      if (action === 'cancel') flash('Game canceled.');
     }
     render();
   } catch (error) {

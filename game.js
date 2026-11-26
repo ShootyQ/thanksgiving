@@ -8,7 +8,10 @@ import { registerIdentity, openIdentityRound, saveGuesses, identityScore, identi
 
 const token = () => randomBytes(24).toString('base64url');
 const missionById = new Map(missions.map(mission => [mission.id, mission]));
-const status = game => Date.now() >= game.cutoff ? 'revealed' : 'open';
+function status(game) {
+  if (game.canceledAt) return 'canceled';
+  return Date.now() >= game.cutoff ? 'revealed' : 'open';
+}
 const active = player => player.assignments.filter(item => item.state === 'active');
 const avatarIds = new Set(avatars.map(avatar => avatar.id));
 const publicPlayer = ({ id, name, score, completed, avatar }) => ({
@@ -55,9 +58,9 @@ function view(game, auth) {
   const standings = Object.values(game.players).map(finalPlayer)
     .sort((a, b) => b.score - a.score || b.completed - a.completed || a.id - b.id);
   return {
-    code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, standings, events: game.events.slice(-30),
+    code: game.code, avatarSelection: true, sniffedPenalty, cutoff: game.cutoff, phase, host, canCancel: host && phase === 'open', standings, events: game.events.slice(-30),
     revealIndex: game.revealIndex,
-    identity: identityView(game, player, revealed),
+    identity: identityView(game, phase === 'canceled' ? null : player, revealed),
     codewords: codewordView(game, player),
     player: player ? { ...finalPlayer(player), missions: active(player).map(details) } : null,
     reveal: phase === 'revealed' ? standings.map(row => ({
@@ -128,7 +131,7 @@ export const gameHandler = store => async (request, response) => {
       } while (!(await store.create(game)));
       return send(response, 201, { token: game.host, ...view(game, game.host) });
     }
-    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr|identity-open|guess|codeword-mission|record-codeword))?$/i);
+    const route = url.pathname.match(/^\/api\/games\/([0-9A-F]{6})(?:\/(join|mission|advance|qr|identity-open|guess|codeword-mission|record-codeword|cancel))?$/i);
     const missing = () => fail(404, 'Game not found. Check the join code.');
     if (!route) missing();
     const code = route[1].toUpperCase();
@@ -138,6 +141,7 @@ export const gameHandler = store => async (request, response) => {
       if (!game) missing();
       if (!action) return send(response, 200, view(game, auth));
       if (action !== 'qr') fail(405, 'Method not allowed.');
+      if (status(game) === 'canceled') fail(409, 'This game was canceled.');
       const origin = process.env.GOBBLE_PUBLIC_ORIGIN || url.searchParams.get('target') || `http://${request.headers.host}`;
       let target;
       try { target = new URL(origin); } catch { fail(400, 'Invalid QR origin.'); }
@@ -233,6 +237,10 @@ function updateGame(game, action, auth, input) {
     if (!player) fail(403, 'Join this game to submit a guess.');
     if (status(game) !== 'open') fail(409, 'Identity guessing is closed.');
     saveGuesses(game, player, input.guesses, fail);
+  } else if (action === 'cancel') {
+    if (auth !== game.host) fail(403, 'Only the game leader can cancel this game.');
+    if (status(game) === 'revealed') fail(409, 'This game has already ended.');
+    game.canceledAt ||= Date.now();
   } else if (action === 'advance') {
     if (auth !== game.host) fail(403, 'Only the game leader can advance the reveal.');
     if (status(game) !== 'revealed') fail(409, 'The reveal opens at cutoff.');
