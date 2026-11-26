@@ -69,12 +69,21 @@ test('host, guests, and TV share scores while missions stay private until reveal
   const cutoff = Date.now() + 2300;
   const host = await gameRequest('', null, { cutoff }, 201);
   const path = '/' + host.code;
-  const [maya, alex] = await Promise.all([
+  assert.equal(host.phase, 'lobby');
+  assert.equal(host.canStart, false);
+  assert.equal(host.joinOpen, true);
+  await gameRequest(path + '/start', host.token, {}, 409);
+  const qr = await fetch(origin + '/api/games' + path + '/qr');
+  assert.equal(qr.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await qr.arrayBuffer()).subarray(1, 4).toString(), 'PNG');
+  const [waitingMaya, waitingAlex] = await Promise.all([
     gameRequest(path + '/join', null, { name: 'Maya', realName: 'Morgan W', family: true, avatar: 'turkey' }, 201),
     gameRequest(path + '/join', null, { name: 'Alex', realName: 'Avery C' }, 201),
   ]);
-  assert.equal(maya.player.missions.length, 3);
-  assert.equal(maya.player.avatar, 'turkey');
+  assert.equal(waitingMaya.player.missions.length, 0);
+  assert.equal(waitingMaya.player.avatar, 'turkey');
+  await gameRequest(path + '/start', waitingMaya.token, {}, 403);
+  await gameRequest(path + '/codeword-mission', waitingMaya.token, {}, 409);
   await gameRequest(path + '/join', null, { name: 'Guest', avatar: 'unknown' }, 400);
   const claim = name => fetch(origin + '/api/games' + path + '/join', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -83,9 +92,19 @@ test('host, guests, and TV share scores while missions stay private until reveal
   const claims = await Promise.all([claim('Blair'), claim('Casey')]);
   assert.deepEqual(claims.map(response => response.status).sort(), [201, 409]);
   const extra = await claims.find(response => response.status === 201).json();
-  assert.equal(maya.identity.choices, undefined);
-  await gameRequest(path + '/identity-open', maya.token, {}, 403);
-  await gameRequest(path + '/identity-open', host.token, {});
+  assert.equal(waitingMaya.identity.choices, undefined);
+  assert.equal((await gameRequest(path, waitingMaya.token)).identity.choices, undefined);
+  assert.equal((await gameRequest(path, host.token)).canStart, true);
+  await gameRequest(path + '/identity-open', host.token, {}, 409);
+  const started = await gameRequest(path + '/start', host.token, {});
+  assert.equal(started.phase, 'open');
+  assert.equal(started.joinOpen, false);
+  assert.equal(started.identity.opened, true);
+  await gameRequest(path + '/join', null, { name: 'Late Guest' }, 409);
+  await gameRequest(path + '/start', host.token, {}, 409);
+  const maya = { ...(await gameRequest(path, waitingMaya.token)), token: waitingMaya.token };
+  const alex = { ...(await gameRequest(path, waitingAlex.token)), token: waitingAlex.token };
+  assert.equal(maya.player.missions.length, 3);
   const privateRound = (await gameRequest(path, maya.token)).identity;
   assert.deepEqual(privateRound.choices.map(choice => choice.name), ['Avery C', 'Blake R']);
   assert.ok(privateRound.choices.every(choice => Object.keys(choice).length === 2));
@@ -97,6 +116,7 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.equal(guessed.player.identified, undefined);
   assert.equal(guessed.player.score, 0);
   assert.equal(guessed.identity.matches, undefined);
+  const expiringLobby = await gameRequest('', null, { cutoff }, 201);
   const otherGame = await gameRequest('', null, { cutoff }, 201);
   const otherPath = '/' + otherGame.code;
   const sam = await gameRequest(otherPath + '/join', null, { name: 'Sam', avatar: 'fox' }, 201);
@@ -108,7 +128,7 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.equal(canceled.canCancel, false);
   assert.equal((await gameRequest(otherPath + '/cancel', otherGame.token, {})).phase, 'canceled');
   await gameRequest(otherPath + '/join', null, { name: 'Guest' }, 409);
-  await gameRequest(otherPath + '/mission', sam.token, { assignmentId: sam.player.missions[0].assignmentId, result: 'completed' }, 409);
+  await gameRequest(otherPath + '/mission', sam.token, { assignmentId: 'no-lobby-mission', result: 'completed' }, 409);
   await gameRequest(otherPath + '/guess', sam.token, { guesses: {} }, 409);
   await gameRequest(otherPath + '/codeword-mission', sam.token, {}, 409);
   await gameRequest(otherPath + '/record-codeword', sam.token, { phrase: 'Gravy' }, 409);
@@ -146,9 +166,7 @@ test('host, guests, and TV share scores while missions stay private until reveal
   assert.ok(!JSON.stringify(tv).includes('Avery C'));
   assert.deepEqual(tv.events, [{ sequence: 1, name: 'Maya', points: first.points, title: first.title, description: first.description }]);
   assert.equal(tv.standings[0].name, 'Maya');
-  const qr = await fetch(origin + '/api/games' + path + '/qr');
-  assert.equal(qr.headers.get('content-type'), 'image/png');
-  assert.equal(Buffer.from(await qr.arrayBuffer()).subarray(1, 4).toString(), 'PNG');
+  assert.equal((await fetch(origin + '/api/games' + path + '/qr')).status, 409);
   await gameRequest(path + '/advance', host.token, { step: 1 }, 409);
   await stop();
   await start();
@@ -157,6 +175,14 @@ test('host, guests, and TV share scores while missions stay private until reveal
   await delay(Math.max(0, cutoff - Date.now() + 30));
   await gameRequest(path + '/mission', maya.token, { assignmentId: restored.player.missions[0].assignmentId, result: 'completed' }, 409);
   await gameRequest(path + '/advance', alex.token, { step: 1 }, 403);
+  const expiringPath = '/' + expiringLobby.code;
+  const expired = await gameRequest(expiringPath, expiringLobby.token);
+  assert.equal(expired.phase, 'lobby');
+  assert.equal(expired.joinOpen, false);
+  assert.equal(expired.reveal, null);
+  await gameRequest(expiringPath + '/start', expiringLobby.token, {}, 409);
+  await gameRequest(expiringPath + '/join', null, { name: 'Late Guest' }, 409);
+  assert.equal((await gameRequest(expiringPath + '/cancel', expiringLobby.token, {})).phase, 'canceled');
   const afterCutoff = await gameRequest(otherPath);
   assert.equal(afterCutoff.phase, 'canceled');
   assert.equal(afterCutoff.reveal, null);

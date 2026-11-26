@@ -66,7 +66,8 @@ let demoNext = 3;
 const demo = { id: 19, score: 0, completed: 0, missions: demoCards.slice(0, 3) };
 const agentLabel = id => 'AGENT ' + String(id).padStart(3, '0');
 const xp = value => new Intl.NumberFormat().format(value);
-const phaseLabel = () => ({ open: 'In progress', closed: 'Scoring closed', canceled: 'Game canceled', revealed: 'Declassified' })[game?.phase] || 'Demo mode';
+const canJoin = state => state?.joinOpen ?? state?.phase === 'open';
+const phaseLabel = () => ({ lobby: canJoin(game) ? 'Lobby open' : 'Lobby closed', open: 'In progress', closed: 'Scoring closed', canceled: 'Game canceled', revealed: 'Declassified' })[game?.phase] || 'Demo mode';
 const header = (eyebrow, title, description) => `<div class="page-heading"><div class="kicker">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div>`;
 const empty = message => `<p class="empty">${message}</p>`;
 
@@ -152,7 +153,13 @@ function agent() {
   if (code && !game?.player) {
     if (!game) return header('SECURE ACCESS', 'Join a game', escape(openingError || 'Contacting headquarters…'));
     return `${header('SECURE ACCESS', 'Join the operation', `Game code ${game.code}`)}
-      <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${game.phase === 'open' ? `<form id="join-form"><label>${game.identity ? 'Create your agent name' : 'Your name'}<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="${game.identity ? 'A codename others won’t guess' : 'Enter your name'}"></label>${game.identity ? `<label>Your real name<input name="realName" maxlength="40" autocomplete="name" required aria-describedby="real-name-help" placeholder="First name and last initial"></label><p class="identity-help" id="real-name-help">Your codename is public. Your real name appears in the guessing list without a codename. Only players in the identity round see the matches at cutoff.</p>` : ''}${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
+      <section class="panel form-panel ${game.avatarSelection ? 'join-panel-wide' : ''}">${canJoin(game) ? `<form id="join-form"><label>${game.identity ? 'Create your agent name' : 'Your name'}<input name="name" maxlength="24" autocomplete="nickname" required autofocus placeholder="${game.identity ? 'A codename others won’t guess' : 'Enter your name'}"></label>${game.identity ? `<label>Your real name<input name="realName" maxlength="40" autocomplete="name" required aria-describedby="real-name-help" placeholder="First name and last initial"></label><p class="identity-help" id="real-name-help">Your codename is public. Your real name appears in the guessing list without a codename. Only players in the identity round see the matches at cutoff.</p>` : ''}${game.avatarSelection ? avatarPicker() : ''}<label class="checkbox"><input type="checkbox" name="family"> Deal me kid-friendly missions</label><button class="primary" type="submit">Join game ${icon('arrow')}</button></form>` : `<p>Joining is closed.</p><a href="${gameLink('tv')}">View the scoreboard</a>`}</section>`;
+  }
+  if (game?.phase === 'lobby') {
+    return `${header('AGENT LOBBY', 'You’re in', canJoin(game)
+      ? 'Your missions will appear here when the game leader starts the game.'
+      : 'The cutoff passed before the game started. Ask the game leader for a new join link.')}
+      <section class="panel form-panel"><div class="standing-agent">${avatarBadge(avatarsById.get(game.player.avatar))}<strong>${escape(game.player.name)}</strong></div></section>`;
   }
   const player = game?.player || demo;
   const playing = !game || game.phase === 'open';
@@ -188,7 +195,7 @@ function host() {
   if (!game) {
     const suggested = new Date(Date.now() + 3 * 3600000);
     const localTime = new Date(suggested - suggested.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    return `${header('COMMAND CENTER', 'Game leader', 'Set the mission cutoff and get your guests into the game.')}
+    return `${header('COMMAND CENTER', 'Game leader', 'Set the mission cutoff and open the lobby for your guests.')}
       <section class="panel form-panel"><form id="host-form">
         <label>Scoring cutoff<input type="datetime-local" name="cutoff" value="${localTime}" required></label>
         <button class="primary" type="submit">Create game ${icon('arrow')}</button></form>${openingError ? empty(escape(openingError)) : ''}</section>`;
@@ -202,6 +209,13 @@ function host() {
     <div class="dashboard"><section class="panel">
     <h2>Guest list</h2>${standings()}
     <div class="host-actions">${game.phase === 'closed' ? '<button class="primary" data-action="reveal">Open group reveal</button>' : ''}
+    ${game.phase === 'lobby' ? `<section class="identity-host">
+      <h3>Start the game</h3>
+      <p>${canJoin(game)
+        ? `${game.standings.length} joined. Start once everyone is in (at least ${game.minimumAgents} agents). Starting closes joining, deals missions, and opens Identity Match if at least three agents entered real names.`
+        : 'The cutoff has passed. Cancel this lobby and create a new game with a later cutoff.'}</p>
+      ${canJoin(game) ? `<button class="primary" data-action="start" ${game.canStart ? '' : 'disabled'}>Start game</button>` : ''}
+    </section>` : ''}
     ${game.phase === 'open' ? '<p>The group reveal opens automatically at the scoring cutoff.</p>' : ''}
     ${game.phase === 'open' && game.identity ? `<section class="identity-host">
       <h3>Identity matching</h3>
@@ -210,9 +224,12 @@ function host() {
     </section>` : ''}
     ${game.canCancel ? '<section class="cancel-game"><button class="secondary danger" data-action="cancel">Cancel game</button></section>' : ''}
     ${game.phase === 'revealed' && game.reveal.length ? `<button class="secondary" data-action="advance" data-step="-1" ${game.revealIndex === 0 ? 'disabled' : ''}>Previous agent</button> <button class="primary" data-action="advance" data-step="1" ${game.revealIndex >= game.reveal.length - 1 ? 'disabled' : ''}>Next agent</button>` : ''}</div></section>
-    <aside><section class="panel briefing"><div class="kicker">RECRUIT AGENTS</div>${qr()}<h2>${game.code}</h2>
-    <button class="secondary" data-action="copy">Copy join link</button> <a class="inline-link" href="${joinLink()}">${playerToken ? 'My missions' : 'Join as a player'} ${icon('arrow')}</a> <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a></section>
-    <section class="panel briefing"><div class="kicker">TIME REMAINING</div><h3 data-clock>${countdown()}</h3><p>Cutoff at ${new Date(game.cutoff).toLocaleString()}</p></section></aside></div>`;
+    <aside><section class="panel briefing"><div class="kicker">${canJoin(game) ? 'RECRUIT AGENTS' : 'GAME DISPLAY'}</div>
+    ${canJoin(game) ? `${qr()}<h2>${game.code}</h2><button class="secondary" data-action="copy">Copy join link</button>` : ''}
+    ${canJoin(game) || playerToken ? `<a class="inline-link" href="${joinLink()}">${playerToken ? 'My dossier' : 'Join as a player'} ${icon('arrow')}</a>` : ''}
+    <a class="inline-link" href="${gameLink('tv')}" target="_blank" rel="noopener">Open TV ${icon('arrow')}</a></section>
+    <section class="panel briefing"><div class="kicker">${game.phase === 'lobby' ? 'SCHEDULED CUTOFF' : 'TIME REMAINING'}</div>
+    ${game.phase === 'open' ? `<h3 data-clock>${countdown()}</h3>` : ''}<p>Cutoff at ${new Date(game.cutoff).toLocaleString()}</p></section></aside></div>`;
 }
 
 function matching() {
@@ -220,6 +237,7 @@ function matching() {
   const heading = description => header('COUNTERINTELLIGENCE', 'Identity match', description);
   if (!game) return heading(escape(openingError || 'Open the Identity match page from your game.'));
   if (game.phase === 'canceled') return heading('The game was canceled.');
+  if (game.phase === 'lobby') return heading('Identity Match opens when the game leader starts the game.');
   if (!identity) return heading('The game leader needs to deploy the latest Firebase function to enable identity matching.');
   if (!game.player) return `${heading('Join the game to make guesses.')}<a class="inline-link" href="${joinLink()}">Join game ${icon('arrow')}</a>`;
   if (!identity.opened) return heading(game.phase === 'revealed' ? 'The identity round did not open.' : 'Waiting for the game leader to open the round.');
@@ -264,29 +282,30 @@ function tv() {
   if (!game) return `${header('LIVE FEED', 'TV scoreboard', escape(openingError || (code ? 'Contacting headquarters…' : 'Enter a game code to watch the live rankings.')))}
     <form id="tv-form" class="panel form-panel"><label>Game code<input name="code" required pattern="[0-9A-Fa-f]{6}" maxlength="6" placeholder="A1B2C3" value="${escape(code)}"></label><button class="primary">Open scoreboard</button></form>`;
   const live = game.phase === 'open';
+  const lobby = game.phase === 'lobby';
   const canceled = game.phase === 'canceled';
   const reveal = game.reveal?.[game.revealIndex];
   const reports = game.events.slice(-8).reverse();
   return `<section class="command-banner">
     <div class="command-radar" aria-hidden="true"></div>
     <div class="command-heading">
-      <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : canceled ? 'OPERATION CANCELED' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
+      <div class="signal"><i></i><span>${live ? 'LIVE TRANSMISSION' : lobby ? 'AGENT LOBBY' : canceled ? 'OPERATION CANCELED' : 'DECLASSIFIED'}</span><span class="signal-code">/ ${game.code}</span></div>
       <h1>Operation <em>Gobble</em></h1>
-      <p>${live ? 'Mission control' : canceled ? 'Game canceled' : 'Mission debrief'}</p>
+      <p>${live ? 'Mission control' : lobby ? 'Waiting for the game leader' : canceled ? 'Game canceled' : 'Mission debrief'}</p>
     </div>
     <div class="command-tools">
       <div class="command-controls">
         <div class="kicker">${live ? 'TIME TO EXTRACTION' : 'OPERATION STATUS'}</div>
-        <strong ${live ? 'data-clock' : ''}>${live ? countdown() : canceled ? 'CANCELED' : 'COMPLETE'}</strong>
+        <strong ${live ? 'data-clock' : ''}>${live ? countdown() : lobby ? (canJoin(game) ? 'STANDBY' : 'LOBBY CLOSED') : canceled ? 'CANCELED' : 'COMPLETE'}</strong>
         <button class="secondary" data-action="sound" aria-pressed="${sound}">${icon('volume')} ${sound ? 'Mute sound' : 'Enable sound'}</button>
       </div>
-      ${live ? `<div class="command-join">${qr()}<div class="kicker">SCAN TO JOIN</div></div>` : ''}
+      ${canJoin(game) ? `<div class="command-join">${qr()}<div class="kicker">SCAN TO JOIN</div></div>` : ''}
     </div>
   </section>
   <div class="command-layout">
     <section class="command-panel command-roster">
       <div class="kicker">${icon('target')} ${game.standings.length} ${game.standings.length === 1 ? 'AGENT' : 'AGENTS'}</div>
-      <h2>${game.phase === 'revealed' ? 'Final standings' : 'Standings'}</h2>${standings()}
+      <h2>${game.phase === 'revealed' ? 'Final standings' : lobby ? 'Agents in lobby' : 'Standings'}</h2>${standings()}
     </section>
     <section class="command-panel command-feed" aria-label="${reveal ? 'Mission reveal' : 'Mission activity'}" tabindex="0">
       ${game.phase === 'revealed' ? awards() : ''}
@@ -294,7 +313,7 @@ function tv() {
         <h2 class="standing-agent">${avatarBadge(avatarsById.get(reveal.avatar))}<span>${escape(reveal.name)}’s missions</span></h2><ul class="reports">${reveal.missions.map(mission => `<li><span class="report-text"><strong>${escape(mission.title)}</strong><span>${escape(mission.description)}</span></span><small>${({ active: 'Open at cutoff', sniffed: 'Sniffed out' })[mission.state] || mission.state}</small></li>`).join('')}</ul>` :
         `<div class="kicker">${icon('folder')} DECLASSIFIED REPORTS</div><h2>Mission activity</h2>
         <div class="tv-alert" role="status">${alertEvent ? `<div class="kicker">${icon('check')} MISSION COMPLETE</div><strong>${escape(alertEvent.name)}</strong><p>${escape(alertEvent.description || 'Completed a mission.')}</p><span>+${xp(alertEvent.points)} XP</span>` : ''}</div>
-        ${reports.length ? `<ul class="reports">${reports.map(report => `<li><span class="report-text"><strong>${escape(report.name)} <span class="report-title">/ ${escape(report.title || 'Mission complete')}</span></strong>${report.description ? `<span>${escape(report.description)}</span>` : ''}</span><small>+${xp(report.points)} XP</small></li>`).join('')}</ul>` : empty('Awaiting the first completed mission.')}`}
+        ${reports.length ? `<ul class="reports">${reports.map(report => `<li><span class="report-text"><strong>${escape(report.name)} <span class="report-title">/ ${escape(report.title || 'Mission complete')}</span></strong>${report.description ? `<span>${escape(report.description)}</span>` : ''}</span><small>+${xp(report.points)} XP</small></li>`).join('')}</ul>` : empty(lobby ? 'Missions begin when the game leader starts the game.' : 'Awaiting the first completed mission.')}`}
     </section>
   </div>`;
 }
@@ -357,7 +376,7 @@ function chime(delay = 0) {
 async function refresh() {
   if (!/^[0-9A-F]{6}$/.test(code) || pending || refreshing) return;
   const now = Date.now();
-  const reachedCutoff = game?.phase === 'open' && now >= game.cutoff;
+  const reachedCutoff = (game?.phase === 'open' || (game?.phase === 'lobby' && canJoin(game))) && now >= game.cutoff;
   if (now < nextRead && !reachedCutoff) return;
   refreshing = true;
   const version = actionVersion;
@@ -385,7 +404,7 @@ async function refresh() {
       lastSequence = latest;
     }
     if (JSON.stringify(game) !== JSON.stringify(next)) {
-      const preserveJoinForm = document.querySelector('#join-form') && next.phase === 'open' &&
+      const preserveJoinForm = document.querySelector('#join-form') && canJoin(next) &&
         !next.player && game.avatarSelection === next.avatarSelection && Boolean(game.identity) === Boolean(next.identity);
       const preserveMatching = page === 'identity' && game?.phase === next.phase &&
         JSON.stringify(game?.identity) === JSON.stringify(next.identity);
@@ -400,7 +419,7 @@ async function refresh() {
     }
   } finally {
     const interval = game?.phase === 'revealed' && page === 'agent' ? 60000
-      : page === 'tv' ? 1200 : document.querySelector('#join-form') ? 2400 : page === 'host' ? 4000 : 12000;
+      : page === 'tv' ? 1200 : (game?.phase === 'lobby' || document.querySelector('#join-form')) ? 2400 : page === 'host' ? 4000 : 12000;
     nextRead = Date.now() + interval;
     refreshing = false;
   }
@@ -477,6 +496,10 @@ app.addEventListener('click', async event => {
       ? `${mission.title} earns ${mission.points} XP${game ? ' and will appear on the TV scoreboard' : ''}.`
       : `${mission.title} will be withdrawn. You’ll lose ${result === 'sniffed' ? penalty() : 25} XP.`;
     if (!(await confirmAction(title, label, description)) || pending) return;
+  } else if (action === 'start') {
+    const confirmed = await confirmAction('Start this game?', 'Start game',
+      'This deals missions and closes joining. Wait until all your guests have joined.', 'Keep lobby open');
+    if (!confirmed || pending) return;
   } else if (action === 'cancel') {
     const confirmed = await confirmAction('Cancel this game?', 'Cancel game',
       'Everyone will stop playing immediately. Scores stay on the TV, and the group reveal will be skipped.', 'Keep playing');
@@ -515,6 +538,7 @@ app.addEventListener('click', async event => {
     } else {
       game = await request('/' + code + '/' + action, action === 'advance' ? { step: Number(step) } : {});
       if (action === 'cancel') flash('Game canceled.');
+      if (action === 'start') flash('Game started.');
     }
     render();
   } catch (error) {
